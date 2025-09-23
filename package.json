@@ -1,6 +1,7 @@
 {
   "name": "ecole-directe-desktop",
-  "version": "1.0.0",
+  "productName": "Mon EcoleDirecte",
+  "version": "1.2.1",
   "description": "Une application permettant de se connecter automatiquement à école directe",
   "main": "advanced.js",
   "scripts": {
@@ -16,6 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "@types/node": "^18.0.6",
+    "electron-chrome-extensions": "^4.9.0",
     "puppeteer-core": "^22.10.0",
     "puppeteer-in-electron": "^3.0.5"
   },
@@ -26,9 +28,22 @@
   },
   "build": {
     "appId": "desktop.ecole-directe.app",
+    "productName": "Mon EcoleDirecte",
     "win": {
       "target": "nsis",
       "icon": "assets/icons/icon.ico"
-    }
+    },
+    "extraFiles": [
+      {
+        "from": "CustomDirecte",
+        "to": "CustomDirecte",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "CustomDirecte"
+    ]
   }
 }
