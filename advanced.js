@@ -184,8 +184,22 @@ const main = async () => {
 
   const page = await pie.getPage(browser, mainWindow);
 
-  await page.type("#username", username);
-  await page.type("#password", password);
+  const currentUsername = await page.$eval("#username", el => el.value);
+  const currentPassword = await page.$eval("#password", el => el.value);
+
+  if (!currentUsername.trim()) {
+	await page.type("#username", username);
+  } else {
+	console.log("Nom d'utilisateur déjà rempli");
+  }
+
+  if (!currentPassword.trim()) {
+	await page.type("#password", password);
+  } else {
+	console.log("Mot de passe déjà rempli");
+  }
+  
+  await page.click("#seSouvenirDeMoi");
   await page.click("#connexion");
   await page.waitForNavigation();
 

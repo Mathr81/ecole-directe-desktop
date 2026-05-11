@@ -234,6 +234,77 @@ main {
   justify-content: center;
 }
 
+/* Quick Links Bar */
+#quick-links-container {
+  display: flex;
+  align-items: center;
+  padding: 5px 20px;
+  margin: 0 20px;
+  background: var(--white);
+  border-radius: 12px;
+  height: 40px;
+  margin-bottom: 10px;
+}
+
+#quick-links-list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  flex-grow: 1;
+}
+
+.quick-link-item {
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+  background: var(--gray-light);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.quick-link-item a {
+  color: var(--background-dark);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.quick-link-item a:hover {
+  text-decoration: underline;
+}
+
+.delete-link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-medium);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  margin-left: 8px;
+  padding: 0 5px;
+}
+
+#add-link-btn {
+  background: var(--primary-medium);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 5px 15px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 10px;
+  flex-shrink: 0;
+}
+
+#add-link-btn:hover {
+  background: var(--primary-dark);
+}
+/* End Quick Links Bar */
+
 /* █▀ █▀▀ █▀█ ▄▀█ █▀█ ▄▀█ ▀█▀ █▀█ █▀█ */
 /* ▄█ ██▄ █▀▀ █▀█ █▀▄ █▀█  █  █▄█ █▀▄ */
 

@@ -265,11 +265,96 @@ genere = () => {
   });
 };
 
+const generateQuickLinks = () => {
+  const container = document.getElementById('quick-links-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const list = document.createElement('ul');
+  list.id = 'quick-links-list';
+
+  const addButton = document.createElement('button');
+  addButton.id = 'add-link-btn';
+  addButton.textContent = 'Ajouter';
+
+  container.appendChild(list);
+  container.appendChild(addButton);
+
+  const getLinks = () => {
+    try {
+      const links = localStorage.getItem('quickLinks');
+      return links ? JSON.parse(links) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const saveLinks = (links) => {
+    localStorage.setItem('quickLinks', JSON.stringify(links));
+  };
+
+  const renderLinks = () => {
+    list.innerHTML = '';
+    const links = getLinks();
+    links.forEach((link, index) => {
+      const listItem = document.createElement('li');
+      listItem.className = 'quick-link-item';
+
+      const linkAnchor = document.createElement('a');
+      linkAnchor.href = link.url;
+      linkAnchor.textContent = link.title;
+      linkAnchor.target = '_blank'; 
+
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'delete-link-btn';
+      deleteButton.textContent = 'X';
+      deleteButton.dataset.index = index;
+
+      listItem.appendChild(linkAnchor);
+      listItem.appendChild(deleteButton);
+      list.appendChild(listItem);
+    });
+  };
+
+  addButton.addEventListener('click', () => {
+    const title = prompt('Entrez le nom du lien :');
+    if (!title) return;
+
+    const url = prompt('Entrez l\'URL du lien :');
+    if (!url) return;
+
+    const links = getLinks();
+    links.push({ title, url });
+    saveLinks(links);
+    renderLinks();
+  });
+
+  list.addEventListener('click', (e) => {
+    if (e.target.classList.contains('delete-link-btn')) {
+      const index = parseInt(e.target.dataset.index, 10);
+      let links = getLinks();
+      links.splice(index, 1);
+      saveLinks(links);
+      renderLinks();
+    }
+  });
+  
+  renderLinks();
+};
+
 /* ██╗ ███╗   ██╗ ████████╗ ███████╗ ██████╗   █████╗   ██████╗ ████████╗ ██╗ ██╗   ██╗ ███████╗ */
 /* ██║ ████╗  ██║ ╚══██╔══╝ ██╔════╝ ██╔══██╗ ██╔══██╗ ██╔════╝ ╚══██╔══╝ ██║ ██║   ██║ ██╔════╝ */
 /* ██║ ██╔██╗ ██║    ██║    █████╗   ██████╔╝ ███████║ ██║         ██║    ██║ ██║   ██║ █████╗   */
 /* ██║ ██║╚██╗██║    ██║    ██╔══╝   ██╔══██╗ ██╔══██║ ██║         ██║    ██║ ╚██╗ ██╔╝ ██╔══╝   */
 /* ██║ ██║ ╚████║    ██║    ███████╗ ██║  ██║ ██║  ██║ ╚██████╗    ██║    ██║  ╚████╔╝  ███████╗ */
-/* ╚═╝ ╚═╝  ╚═══╝    ╚═╝    ╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝  ╚═════╝    ╚═╝    ╚═╝   ╚═══╝   ╚══════╝ */
+/* ╚═╝ ╚═╝  ╚═══╝    ╚═╝    ╚══════╝ ╚═╝  ╚═══╝ ╚═╝  ╚═══╝  ╚═════╝    ╚═╝    ╚═╝   ╚═══╝   ╚══════╝ */
 
 genere();
+generateQuickLinks();
+
+browserStorageOnChanged.addListener((changes) => {
+  if (changes.options) {
+    genere();
+    generateQuickLinks();
+  }
+});
