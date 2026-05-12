@@ -1,7 +1,7 @@
 {
   "name": "ecole-directe-desktop",
   "productName": "Mon EcoleDirecte",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Une application permettant de se connecter automatiquement à école directe",
   "main": "index.js",
   "scripts": {

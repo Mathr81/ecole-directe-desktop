@@ -73,12 +73,19 @@ function getCustomExtensionPath() {
     return path.join(__dirname, "CustomDirecte");
   }
 
-  const appPath = app.getAppPath();
-  console.log("app.getAppPath():", appPath);
-  const appInstallationRoot = path.dirname(path.dirname(appPath));
-  const extensionPath = path.join(appInstallationRoot, "CustomDirecte");
-  console.log("Extension path:", extensionPath);
-  return extensionPath;
+  // Remonter depuis app.asar jusqu'à trouver CustomDirecte
+  let dir = path.dirname(app.getAppPath()); // resources/
+  for (let i = 0; i < 4; i++) {
+    dir = path.dirname(dir);
+    const candidate = path.join(dir, "CustomDirecte");
+    if (fs.existsSync(candidate)) {
+      console.log("Extension trouvée :", candidate);
+      return candidate;
+    }
+  }
+
+  console.error("CustomDirecte introuvable depuis", app.getAppPath());
+  return path.join(path.dirname(path.dirname(app.getAppPath())), "CustomDirecte");
 }
 
 // =========================
