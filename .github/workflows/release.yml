@@ -1,0 +1,69 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*" # Déclenché sur les tags de type v1.2.3
+
+permissions:
+  contents: write # Nécessaire pour créer les GitHub Releases
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout du code ──
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node.js ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ── 3. Setup pnpm ──
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: false
+
+      # ── 4. Cache pnpm store ──
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # ── 5. Installer les dépendances ──
+      # --frozen-lockfile garantit que le pnpm-lock.yaml est respecté à l'identique
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── 6. Build & publish ──
+      # GH_TOKEN est automatiquement disponible dans les Actions GitHub
+      # electron-builder va créer la Release et uploader le .exe + latest.yml
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run build -- --publish always
+
+      # ── 7. Upload artifacts (optionnel, pour debug en cas d'échec) ──
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: |
+            dist/
+            *.log

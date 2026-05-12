@@ -1,16 +1,14 @@
 {
   "name": "ecole-directe-desktop",
   "productName": "Mon EcoleDirecte",
-  "version": "1.2.3",
+  "version": "1.4.0",
   "description": "Une application permettant de se connecter automatiquement à école directe",
   "main": "index.js",
   "scripts": {
     "start": "cross-env NODE_ENV=development electron .",
-    "package-win": "electron-packager . ecole-directe-desktop --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/icons/icon.ico",
-    "package-linux": "electron-packager . ecole-directe-desktop --platform=linux --arch=x64 --out=dist --overwrite --icon=assets/icons/icon.png",
-    "package-mac": "electron-packager . ecole-directe-desktop --platform=darwin --arch=x64 --out=dist --overwrite --icon=assets/icons/icon.icns",
-    "package-all": "electron-packager . ecole-directe-desktop --platform=win32,darwin,linux --arch=x64 --out=dist --overwrite --icon=assets/icons/icon",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "build:publish": "electron-builder --publish always",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": "Mathr81",
@@ -19,6 +17,7 @@
     "@types/node": "^25.6.2",
     "cross-env": "^10.1.0",
     "electron-chrome-extensions": "^4.9.0",
+    "electron-updater": "^6.3.9",
     "puppeteer-core": "^24.43.1",
     "puppeteer-in-electron": "^3.0.5"
   },
@@ -30,10 +29,28 @@
   "build": {
     "appId": "desktop.ecole-directe.app",
     "productName": "Mon EcoleDirecte",
+    "publish": {
+      "provider": "github",
+      "owner": "Mathr81",
+      "repo": "ecole-directe-desktop"
+    },
     "win": {
       "target": "nsis",
       "icon": "assets/icons/icon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Mon EcoleDirecte"
+    },
+    "files": [
+      "**/*",
+      "!userData/**",
+      "!dist/**",
+      "!.git/**"
+    ],
     "extraFiles": [
       {
         "from": "CustomDirecte",
@@ -45,6 +62,10 @@
     ],
     "asarUnpack": [
       "CustomDirecte"
-    ]
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    }
   }
 }

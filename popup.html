@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lien externe</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #1a1a2e;
+        overflow: hidden;
+        user-select: none;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── Barre de titre draggable ── */
+      #toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: #16213e;
+        border-bottom: 1px solid #0f3460;
+        -webkit-app-region: drag;
+        height: 42px;
+        flex-shrink: 0;
+      }
+
+      #toolbar * {
+        -webkit-app-region: no-drag;
+      }
+
+      #favicon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        opacity: 0.8;
+      }
+
+      #url-display {
+        flex: 1;
+        background: #0f3460;
+        border: 1px solid #1a4a80;
+        border-radius: 5px;
+        padding: 4px 10px;
+        color: #a8d8ea;
+        font-size: 12px;
+        font-family: "Consolas", monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: default;
+        min-width: 0;
+      }
+
+      .btn {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border: none;
+        border-radius: 5px;
+        font-size: 11.5px;
+        font-family: "Segoe UI", sans-serif;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .btn:active {
+        transform: scale(0.96);
+      }
+
+      #btn-copy {
+        background: #0f3460;
+        color: #a8d8ea;
+        border: 1px solid #1a4a80;
+      }
+
+      #btn-copy:hover {
+        background: #1a4a80;
+      }
+
+      #btn-copy.copied {
+        background: #1a6640;
+        border-color: #28a065;
+        color: #7df5b0;
+      }
+
+      #btn-open {
+        background: #e94560;
+        color: #fff;
+      }
+
+      #btn-open:hover {
+        background: #ff5c78;
+      }
+
+      #btn-close {
+        background: transparent;
+        color: #8899aa;
+        border: 1px solid #2a3a4a;
+        padding: 4px 7px;
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      #btn-close:hover {
+        background: #e94560;
+        color: #fff;
+        border-color: #e94560;
+      }
+
+      /* ── Zone webview ── */
+      webview {
+        flex: 1;
+        width: 100%;
+        border: none;
+        background: #fff;
+      }
+
+      /* ── Toast de confirmation ── */
+      #toast {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: #1a6640;
+        color: #7df5b0;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity 0.2s, transform 0.2s;
+        pointer-events: none;
+        z-index: 999;
+      }
+
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <img id="favicon" src="" alt="" />
+      <div id="url-display">Chargement…</div>
+      <button class="btn" id="btn-copy">📋 Copier</button>
+      <button class="btn" id="btn-open">🌐 Navigateur</button>
+      <button class="btn" id="btn-close">✕</button>
+    </div>
+
+    <webview id="wv" src="about:blank" allowpopups></webview>
+
+    <div id="toast">✓ URL copiée !</div>
+
+    <script>
+      const { ipcRenderer, clipboard, shell } = require("electron");
+
+      const urlDisplay = document.getElementById("url-display");
+      const wv = document.getElementById("wv");
+      const favicon = document.getElementById("favicon");
+      const toast = document.getElementById("toast");
+
+      let currentUrl = "";
+
+      // Recevoir l'URL depuis le main process
+      ipcRenderer.on("load-url", (event, url) => {
+        currentUrl = url;
+        urlDisplay.textContent = url;
+        wv.src = url;
+
+        // Favicon basique depuis le domaine
+        try {
+          const domain = new URL(url).origin;
+          favicon.src = `${domain}/favicon.ico`;
+          favicon.onerror = () => {
+            favicon.src = "";
+          };
+        } catch {}
+      });
+
+      // Mettre à jour l'URL quand la webview navigue
+      wv.addEventListener("did-navigate", (e) => {
+        currentUrl = e.url;
+        urlDisplay.textContent = e.url;
+        try {
+          const domain = new URL(e.url).origin;
+          favicon.src = `${domain}/favicon.ico`;
+        } catch {}
+      });
+
+      wv.addEventListener("did-navigate-in-page", (e) => {
+        if (e.isMainFrame) {
+          currentUrl = e.url;
+          urlDisplay.textContent = e.url;
+        }
+      });
+
+      // Titre de fenêtre dynamique
+      wv.addEventListener("page-title-updated", (e) => {
+        document.title = e.title || "Lien externe";
+      });
+
+      // Copier l'URL
+      document.getElementById("btn-copy").addEventListener("click", () => {
+        clipboard.writeText(currentUrl);
+        const btn = document.getElementById("btn-copy");
+        btn.classList.add("copied");
+        btn.textContent = "✓ Copié !";
+        showToast();
+        setTimeout(() => {
+          btn.classList.remove("copied");
+          btn.textContent = "📋 Copier";
+        }, 2000);
+      });
+
+      // Ouvrir dans navigateur
+      document.getElementById("btn-open").addEventListener("click", () => {
+        shell.openExternal(currentUrl);
+      });
+
+      // Fermer la fenêtre
+      document.getElementById("btn-close").addEventListener("click", () => {
+        window.close();
+      });
+
+      // Raccourcis dans la popup
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "F5") wv.reload();
+        if (e.key === "F12") ipcRenderer.send("popup-devtools");
+        if ((e.ctrlKey || e.metaKey) && e.key === "r") wv.reload();
+        if (e.altKey && e.key === "ArrowLeft") wv.goBack();
+        if (e.altKey && e.key === "ArrowRight") wv.goForward();
+        if (e.ctrlKey && e.key === "l") {
+          // Copie l'URL dans le presse-papier via Ctrl+L
+          clipboard.writeText(currentUrl);
+          showToast();
+        }
+      });
+
+      function showToast() {
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2000);
+      }
+    </script>
+  </body>
+</html>

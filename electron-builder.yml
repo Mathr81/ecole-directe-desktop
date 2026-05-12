@@ -1,0 +1,46 @@
+appId: desktop.ecole-directe.app
+productName: Mon EcoleDirecte
+
+# Publication vers GitHub Releases
+publish:
+  provider: github
+  owner: Mathr81
+  repo: ecole-directe-desktop
+
+# Windows
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icons/icon.ico
+
+# Installeur NSIS
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Mon EcoleDirecte
+
+# Fichiers à inclure/exclure
+files:
+  - "**/*"
+  - "!userData/**"
+  - "!dist/**"
+  - "!.git/**"
+
+# Copier l'extension à côté du dossier app (pas dans l'asar)
+extraFiles:
+  - from: CustomDirecte
+    to: CustomDirecte
+    filter:
+      - "**/*"
+
+asarUnpack:
+  - CustomDirecte
+
+# Répertoire de build
+directories:
+  output: dist
+  buildResources: assets
