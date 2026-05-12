@@ -1,11 +1,11 @@
 {
   "name": "ecole-directe-desktop",
   "productName": "Mon EcoleDirecte",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Une application permettant de se connecter automatiquement à école directe",
-  "main": "advanced.js",
+  "main": "index.js",
   "scripts": {
-    "start": "electron .",
+    "start": "cross-env NODE_ENV=development electron .",
     "package-win": "electron-packager . ecole-directe-desktop --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/icons/icon.ico",
     "package-linux": "electron-packager . ecole-directe-desktop --platform=linux --arch=x64 --out=dist --overwrite --icon=assets/icons/icon.png",
     "package-mac": "electron-packager . ecole-directe-desktop --platform=darwin --arch=x64 --out=dist --overwrite --icon=assets/icons/icon.icns",
@@ -16,15 +16,16 @@
   "author": "Mathr81",
   "license": "MIT",
   "dependencies": {
-    "@types/node": "^18.0.6",
+    "@types/node": "^25.6.2",
+    "cross-env": "^10.1.0",
     "electron-chrome-extensions": "^4.9.0",
-    "puppeteer-core": "^22.10.0",
+    "puppeteer-core": "^24.43.1",
     "puppeteer-in-electron": "^3.0.5"
   },
   "devDependencies": {
-    "electron": "^30.0.8",
-    "electron-builder": "^25.0.5",
-    "electron-packager": "^17.1.2"
+    "@electron/packager": "^20.0.0",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "desktop.ecole-directe.app",
