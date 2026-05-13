@@ -486,13 +486,23 @@ async function main() {
   // =========================
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Ne pas intercepter les urls d'EcoleDirecte elle-même
-    if (url.startsWith("about:") || url.startsWith("devtools:")) {
-      return { action: "allow" };
+    // URLs de téléchargement direct (API EcoleDirecte ou autres fichiers)
+    const isDownload = 
+      url.includes('api.ecoledirecte.com') ||
+      /\.(pdf|docx?|xlsx?|pptx?|zip|rar|png|jpg|jpeg|gif)(\?|$)/i.test(url);
+  
+    if (isDownload) {
+      // Déclencher le téléchargement natif Electron
+      mainWindow.webContents.downloadURL(url);
+      return { action: 'deny' };
     }
-
+  
+    if (url.startsWith('about:') || url.startsWith('devtools:')) {
+      return { action: 'allow' };
+    }
+  
     createPopupWindow(url);
-    return { action: "deny" };
+    return { action: 'deny' };
   });
 
   // =========================
