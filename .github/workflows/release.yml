@@ -3,53 +3,193 @@ name: Build & Release
 on:
   push:
     tags:
-      - "v*" # Déclenché sur les tags de type v1.2.3
+      - "v*"
 
 permissions:
-  contents: write # Nécessaire pour créer les GitHub Releases
+  contents: write
 
 jobs:
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
+  # ══════════════════════════════════════════
+  # JOB 1 — Génération du changelog (une fois)
+  # ══════════════════════════════════════════
+  changelog:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+
+    outputs:
+      notes_file: release_notes.md
 
     steps:
-      # ── 1. Checkout du code ──
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # ── 2. Setup pnpm (AVANT Node pour que le cache fonctionne) ──
+      - name: Generate changelog
+        id: changelog
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
+
+          echo "Tag actuel : $CURRENT_TAG"
+          echo "Tag précédent : $PREVIOUS_TAG"
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"%s" "${PREVIOUS_TAG}..HEAD")
+          fi
+
+          FEATURES=""
+          FIXES=""
+          CHORES=""
+          OTHERS=""
+
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^feat(\(.+\))?:\ (.+) ]]; then
+              FEATURES="$FEATURES\n- ${BASH_REMATCH[2]}"
+            elif [[ "$line" =~ ^fix(\(.+\))?:\ (.+) ]]; then
+              FIXES="$FIXES\n- ${BASH_REMATCH[2]}"
+            elif [[ "$line" =~ ^(chore|ci|build|docs)(\(.+\))?:\ (.+) ]]; then
+              CHORES="$CHORES\n- ${BASH_REMATCH[3]}"
+            elif [[ -n "$line" ]]; then
+              OTHERS="$OTHERS\n- $line"
+            fi
+          done <<< "$COMMITS"
+
+          BODY="## 🚀 Mon ÉcoleDirecte ${CURRENT_TAG}"$'\n\n'
+
+          if [ -n "$FEATURES" ]; then
+            BODY+="### ✨ Nouvelles fonctionnalités"$'\n'
+            BODY+=$(printf "%b" "$FEATURES")
+            BODY+=$'\n\n'
+          fi
+          if [ -n "$FIXES" ]; then
+            BODY+="### 🐛 Corrections"$'\n'
+            BODY+=$(printf "%b" "$FIXES")
+            BODY+=$'\n\n'
+          fi
+          if [ -n "$OTHERS" ]; then
+            BODY+="### 🔧 Autres changements"$'\n'
+            BODY+=$(printf "%b" "$OTHERS")
+            BODY+=$'\n\n'
+          fi
+          if [ -n "$CHORES" ]; then
+            BODY+="### ⚙️ Maintenance"$'\n'
+            BODY+=$(printf "%b" "$CHORES")
+            BODY+=$'\n\n'
+          fi
+
+          BODY+="---"$'\n'
+          BODY+="📥 **Téléchargez l'installeur** correspondant à votre OS ci-dessous."$'\n'
+          BODY+="| OS | Fichier |"$'\n'
+          BODY+="|----|---------|"$'\n'
+          BODY+="| 🪟 Windows | \`Mon-EcoleDirecte-Setup-${CURRENT_TAG#v}.exe\` |"$'\n'
+          BODY+="| 🍎 macOS | \`Mon-EcoleDirecte-${CURRENT_TAG#v}.dmg\` |"$'\n'
+          BODY+="| 🐧 Linux | \`Mon-EcoleDirecte-${CURRENT_TAG#v}.AppImage\` |"$'\n'
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            BODY+=$'\n'"🔍 **Changements complets** : [\`${PREVIOUS_TAG}\` → \`${CURRENT_TAG}\`](https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${CURRENT_TAG})"
+          fi
+
+          printf "%s" "$BODY" > release_notes.md
+
+      # Partager le fichier entre jobs via artifact
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release_notes.md
+
+  # ══════════════════════════════════════════
+  # JOB 2 — Build en parallèle sur 3 OS
+  # ══════════════════════════════════════════
+  build:
+    name: Build ${{ matrix.os_name }}
+    needs: changelog
+    strategy:
+      fail-fast: false  # Si un OS échoue, les autres continuent quand même
+      matrix:
+        include:
+          - os: windows-latest
+            os_name: Windows
+            build_args: "--win"
+
+          - os: macos-latest
+            os_name: macOS
+            build_args: "--mac"
+
+          - os: ubuntu-latest
+            os_name: Linux
+            build_args: "--linux"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── pnpm doit être installé AVANT setup-node sur tous les OS ──
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10 # pnpm 10 = stable, compatible Node 22 LTS
+          version: 10
           run_install: false
 
-      # ── 3. Setup Node.js ──
-      # setup-node gère le cache pnpm automatiquement quand pnpm est déjà installé
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "pnpm"
 
-      # ── 4. Installer les dépendances ──
-      # --frozen-lockfile garantit que le pnpm-lock.yaml est respecté à l'identique
+      # Linux uniquement — dépendances système pour electron-builder AppImage
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot dpkg
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── 5. Build & publish ──
-      # GH_TOKEN est automatiquement disponible dans les Actions GitHub
-      # electron-builder va créer la Release et uploader le .exe + latest.yml
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build -- --publish always
+          # macOS — pas de signature de code (pas de certificat Apple)
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: pnpm run build -- ${{ matrix.build_args }} --publish always
 
-      # ── 6. Upload artifacts (optionnel, pour debug en cas d'échec) ──
-      - name: Upload build artifacts
+      - name: Upload build artifacts on failure
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: build-logs
+          name: build-logs-${{ matrix.os_name }}
           path: dist/
+
+  # ══════════════════════════════════════════
+  # JOB 3 — Mise à jour du body de la release
+  # (après que tous les builds soient terminés)
+  # ══════════════════════════════════════════
+  update-release:
+    name: Update release notes
+    needs: build
+    runs-on: ubuntu-latest
+    # Tourner même si certains builds ont échoué (fail-fast: false)
+    if: always()
+
+    steps:
+      - name: Download changelog artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Update GitHub Release body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${GITHUB_REF_NAME}" \
+            --notes-file release_notes.md \
+            --repo "${{ github.repository }}"
