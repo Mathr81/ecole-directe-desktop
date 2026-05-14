@@ -1,2 +1,5 @@
+allowBuilds:
+  canvas: true
+  electron-winstaller: true
 onlyBuiltDependencies:
   - electron-winstaller

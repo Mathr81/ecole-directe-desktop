@@ -1,7 +1,7 @@
 {
   "name": "ecole-directe-desktop",
   "productName": "Mon EcoleDirecte",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "Une application permettant de se connecter automatiquement à école directe",
   "main": "index.js",
   "scripts": {
@@ -15,6 +15,7 @@
   "license": "MIT",
   "dependencies": {
     "@types/node": "^25.6.2",
+    "canvas": "^3.2.3",
     "cross-env": "^10.1.0",
     "electron-chrome-extensions": "^4.9.0",
     "electron-updater": "^6.3.9",
@@ -49,7 +50,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icons/icon.png",
@@ -63,7 +67,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icons/icon.png",

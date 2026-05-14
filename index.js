@@ -13,6 +13,7 @@ const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const pie = require("puppeteer-in-electron");
 const puppeteer = require("puppeteer-core");
 const { autoUpdater } = require("electron-updater");
+const { startBadgePolling, stopBadgePolling } = require("./badge");
 const fs = require("fs");
 const path = require("path");
 
@@ -73,7 +74,8 @@ function getCustomExtensionPath() {
     return path.join(__dirname, "CustomDirecte");
   }
 
-  // Remonter depuis app.asar jusqu'à trouver CustomDirecte
+  // Remonter depuis app.asar jusqu'à trouver CustomDirecte (robuste
+  // quelle que soit la profondeur d'imbrication d'electron-builder)
   let dir = path.dirname(app.getAppPath()); // resources/
   for (let i = 0; i < 4; i++) {
     dir = path.dirname(dir);
@@ -84,8 +86,13 @@ function getCustomExtensionPath() {
     }
   }
 
-  console.error("CustomDirecte introuvable depuis", app.getAppPath());
-  return path.join(path.dirname(path.dirname(app.getAppPath())), "CustomDirecte");
+  // Fallback ultime
+  const fallback = path.join(
+    path.dirname(path.dirname(app.getAppPath())),
+    "CustomDirecte"
+  );
+  console.error("CustomDirecte introuvable, fallback :", fallback);
+  return fallback;
 }
 
 // =========================
@@ -207,17 +214,13 @@ function createPopupWindow(url) {
     }
   });
 
-  // Raccourcis dans la popup via globalShortcut (quand focused)
+  // Raccourcis Alt+fleches dans la popup
   popup.on("focus", () => {
     globalShortcut.register("Alt+Left", () => {
-      if (!popup.isDestroyed()) {
-        popup.webContents.goBack();
-      }
+      if (!popup.isDestroyed()) popup.webContents.goBack();
     });
     globalShortcut.register("Alt+Right", () => {
-      if (!popup.isDestroyed()) {
-        popup.webContents.goForward();
-      }
+      if (!popup.isDestroyed()) popup.webContents.goForward();
     });
   });
 
@@ -261,7 +264,6 @@ function setupAutoUpdater(mainWindow) {
 
   autoUpdater.on("update-available", (info) => {
     console.log(`Mise à jour disponible : v${info.version}`);
-    // Notification discrète dans la fenêtre
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         if (!document.getElementById('ed-update-banner')) {
@@ -284,9 +286,7 @@ function setupAutoUpdater(mainWindow) {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         const banner = document.getElementById('ed-update-banner');
-        if (banner) {
-          banner.textContent = '✓ Mise à jour prête — sera installée à la fermeture';
-        }
+        if (banner) banner.textContent = '✓ Mise à jour prête — sera installée à la fermeture';
       `).catch(() => {});
     }
   });
@@ -295,7 +295,6 @@ function setupAutoUpdater(mainWindow) {
     console.error("Erreur auto-updater :", err.message);
   });
 
-  // Vérifier au démarrage puis toutes les heures
   autoUpdater.checkForUpdates().catch((err) => {
     console.error("Impossible de vérifier les mises à jour :", err.message);
   });
@@ -305,120 +304,6 @@ function setupAutoUpdater(mainWindow) {
       console.error("Erreur vérification périodique :", err.message);
     });
   }, 60 * 60 * 1000);
-}
-
-// =========================
-// BADGE TASKBAR (notifications)
-// =========================
-
-let badgeCheckInterval = null;
-
-// Sélecteurs à essayer dans l'ordre (fallback progressif)
-const BADGE_SELECTORS = [
-  "#menuId-5618 > li:nth-child(5) > ed-menu-block-item > div > a > span.badge.alert-danger.ed-menu-badge",
-  "span.badge.alert-danger.ed-menu-badge",
-  ".badge.alert-danger",
-  ".ed-menu-badge",
-];
-
-async function updateBadge(page, mainWindow) {
-  if (!page || mainWindow.isDestroyed()) return;
-
-  try {
-    const count = await page.evaluate((selectors) => {
-      for (const selector of selectors) {
-        try {
-          const els = document.querySelectorAll(selector);
-          if (els.length > 0) {
-            let total = 0;
-            els.forEach((el) => {
-              const n = parseInt(el.textContent.trim(), 10);
-              if (!isNaN(n)) total += n;
-            });
-            if (total > 0) return total;
-          }
-        } catch {
-          // Sélecteur invalide, on passe au suivant
-        }
-      }
-      return 0;
-    }, BADGE_SELECTORS);
-
-    if (process.platform === "win32") {
-      if (count > 0) {
-        // Overlay icon Windows (petit badge rouge)
-        mainWindow.setOverlayIcon(
-          createBadgeImage(count),
-          `${count} notification(s)`
-        );
-      } else {
-        mainWindow.setOverlayIcon(null, "");
-      }
-    }
-  } catch (err) {
-    // Silencieux — la page peut être en navigation
-  }
-}
-
-/**
- * Crée une image NativeImage avec le nombre de notifications
- * Format : cercle rouge avec chiffre blanc, 20x20px
- */
-function createBadgeImage(count) {
-  const { nativeImage } = require("electron");
-  const { createCanvas } = (() => {
-    try {
-      return require("canvas");
-    } catch {
-      return null;
-    }
-  })() || {};
-
-  // Fallback si canvas n'est pas disponible : image SVG encodée
-  if (!createCanvas) {
-    const label = count > 99 ? "99+" : String(count);
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
-        <circle cx="10" cy="10" r="10" fill="#e94560"/>
-        <text x="10" y="14" text-anchor="middle" font-family="Segoe UI,Arial" font-size="${label.length > 1 ? 8 : 11}" font-weight="bold" fill="white">${label}</text>
-      </svg>
-    `;
-    return nativeImage.createFromDataURL(
-      `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`
-    );
-  }
-
-  // Avec canvas (optionnel, meilleur rendu)
-  const canvas = createCanvas(20, 20);
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#e94560";
-  ctx.beginPath();
-  ctx.arc(10, 10, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "white";
-  ctx.font = `bold ${count > 9 ? 8 : 11}px "Segoe UI"`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(count > 99 ? "99+" : String(count), 10, 10);
-
-  return nativeImage.createFromDataURL(canvas.toDataURL());
-}
-
-function startBadgePolling(page, mainWindow) {
-  // Vérifier toutes les 2 minutes
-  badgeCheckInterval = setInterval(() => {
-    updateBadge(page, mainWindow);
-  }, 2 * 60 * 1000);
-
-  // Premier check après 5 secondes (laisse le temps à la page de charger)
-  setTimeout(() => updateBadge(page, mainWindow), 5000);
-}
-
-function stopBadgePolling() {
-  if (badgeCheckInterval) {
-    clearInterval(badgeCheckInterval);
-    badgeCheckInterval = null;
-  }
 }
 
 // =========================
@@ -486,23 +371,26 @@ async function main() {
   // =========================
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // URLs de téléchargement direct (API EcoleDirecte ou autres fichiers)
-    const isDownload = 
-      url.includes('api.ecoledirecte.com') ||
-      /\.(pdf|docx?|xlsx?|pptx?|zip|rar|png|jpg|jpeg|gif)(\?|$)/i.test(url);
-  
-    if (isDownload) {
-      // Déclencher le téléchargement natif Electron
-      mainWindow.webContents.downloadURL(url);
-      return { action: 'deny' };
+    if (url.startsWith("about:") || url.startsWith("devtools:")) {
+      return { action: "allow" };
     }
   
-    if (url.startsWith('about:') || url.startsWith('devtools:')) {
-      return { action: 'allow' };
+    // URLs blob et data: → téléchargements générés par JS côté page
+    // Electron ne peut pas les télécharger directement,
+    // il faut laisser la page les gérer elle-même
+    if (url.startsWith("blob:") || url.startsWith("data:")) {
+      // On laisse Electron ouvrir une vraie fenêtre (comportement par défaut)
+      // mais on l'intercepte pour injecter un script de téléchargement
+      return { action: "allow" };
+    }
+  
+    // URLs API EcoleDirecte → laisser passer sans popup
+    if (url.includes("api.ecoledirecte.com")) {
+      return { action: "allow" };
     }
   
     createPopupWindow(url);
-    return { action: 'deny' };
+    return { action: "deny" };
   });
 
   // =========================
@@ -510,17 +398,11 @@ async function main() {
   // =========================
 
   mainWindow.on("focus", () => {
-    // Navigation historique (uniquement quand la fenêtre principale a le focus)
     globalShortcut.register("Alt+Left", () => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.goBack();
-      }
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.goBack();
     });
-
     globalShortcut.register("Alt+Right", () => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.goForward();
-      }
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.goForward();
     });
   });
 
@@ -529,18 +411,15 @@ async function main() {
     globalShortcut.unregister("Alt+Right");
   });
 
-  // Raccourcis permanents (toute l'app)
-  app.on("browser-window-focus", (event, win) => {
+  app.on("browser-window-focus", () => {
     globalShortcut.register("F5", () => {
       const focused = BrowserWindow.getFocusedWindow();
       if (focused) focused.webContents.reload();
     });
-
     globalShortcut.register("F12", () => {
       const focused = BrowserWindow.getFocusedWindow();
       if (focused) focused.webContents.openDevTools({ mode: "detach" });
     });
-
     globalShortcut.register("CommandOrControl+R", () => {
       const focused = BrowserWindow.getFocusedWindow();
       if (focused) focused.webContents.reload();
@@ -553,7 +432,25 @@ async function main() {
 
   const url = "https://www.ecoledirecte.com/login?cameFrom=%2FAccueil";
   await mainWindow.loadURL(url);
-
+  
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents.executeJavaScript(`
+      const _originalOpen = window.open.bind(window);
+      window.open = function(url, ...args) {
+        if (url && (url.startsWith('blob:') || url.startsWith('data:'))) {
+          // Déclencher le téléchargement via un <a> invisible
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return null;
+        }
+        return _originalOpen(url, ...args);
+      };
+    `).catch(() => {});
+  });
   // =========================
   // GET CREDS
   // =========================
@@ -617,7 +514,6 @@ async function main() {
       "#seSouvenirDeMoi",
       (el) => el.checked
     );
-
     if (!rememberMeChecked) {
       await page.click("#seSouvenirDeMoi");
     }
@@ -631,9 +527,7 @@ async function main() {
 
   await page.click("#connexion");
 
-  await page.waitForNavigation({
-    waitUntil: "networkidle2",
-  });
+  await page.waitForNavigation({ waitUntil: "networkidle2" });
 
   console.log("Connexion réussie");
 
@@ -662,13 +556,7 @@ async function main() {
 // RE-LOGIN WATCHER
 // =========================
 
-/**
- * Injecte un MutationObserver dans la page qui surveille l'apparition
- * du champ mot de passe (popup de session expirée).
- * Quand détecté, envoie un signal IPC pour remplir le password automatiquement.
- */
 async function setupReloginWatcher(page, mainWindow, password) {
-  // Injection du watcher dans la page courante et toutes les futures navigations
   await page.evaluateOnNewDocument(() => {
     let watcherActive = false;
 
@@ -677,25 +565,19 @@ async function setupReloginWatcher(page, mainWindow, password) {
       watcherActive = true;
 
       const observer = new MutationObserver(() => {
-        // Cherche un champ password visible qui n'est PAS la page de login initiale
         const passwordFields = document.querySelectorAll(
           'input[type="password"]'
         );
 
         passwordFields.forEach((field) => {
-          // Le champ doit être visible (offsetParent !== null)
           if (field.offsetParent !== null) {
-            // Vérifier que ce n'est pas la page de login normale
             const isLoginPage = window.location.pathname.includes("/login");
 
-            if (!isLoginPage) {
-              // C'est la popup de re-connexion
-              if (!field.dataset.edWatcherFired) {
-                field.dataset.edWatcherFired = "1";
-                window.dispatchEvent(
-                  new CustomEvent("ed-relogin-needed", { detail: field.id })
-                );
-              }
+            if (!isLoginPage && !field.dataset.edWatcherFired) {
+              field.dataset.edWatcherFired = "1";
+              window.dispatchEvent(
+                new CustomEvent("ed-relogin-needed", { detail: field.id })
+              );
             }
           }
         });
@@ -709,7 +591,6 @@ async function setupReloginWatcher(page, mainWindow, password) {
       });
     }
 
-    // Démarrer quand la page est prête
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", startWatcher);
     } else {
@@ -717,13 +598,11 @@ async function setupReloginWatcher(page, mainWindow, password) {
     }
   });
 
-  // Écouter l'événement depuis la page via exposeFunction
   await page.exposeFunction("__edTriggerRelogin", async () => {
     console.log("Re-login nécessaire détecté !");
     await performRelogin(page, password);
   });
 
-  // Pont entre l'événement DOM et la fonction exposée
   await page.evaluate(() => {
     window.addEventListener("ed-relogin-needed", () => {
       if (typeof window.__edTriggerRelogin === "function") {
@@ -732,9 +611,9 @@ async function setupReloginWatcher(page, mainWindow, password) {
     });
   });
 
-  // Fallback : surveiller aussi les navigations vers /login
-  mainWindow.webContents.on("did-navigate", async (event, url) => {
-    if (url.includes("/login")) {
+  // Fallback : navigation vers /login
+  mainWindow.webContents.on("did-navigate", async (event, navUrl) => {
+    if (navUrl.includes("/login")) {
       console.log("Redirection login détectée, re-login en cours…");
       await sleep(800);
       await performRelogin(page, password, true);
@@ -742,18 +621,11 @@ async function setupReloginWatcher(page, mainWindow, password) {
   });
 }
 
-/**
- * Effectue le re-login :
- * - isFullLogin = true → remplit aussi le username (page de login complète)
- * - isFullLogin = false → remplit seulement le password (popup)
- */
 async function performRelogin(page, password, isFullLogin = false) {
   try {
-    // Attendre que le champ password soit disponible
     await page.waitForSelector('input[type="password"]', { timeout: 5000 });
 
     if (isFullLogin) {
-      // Page de login complète : remplir username aussi
       const usernameField = await page.$("#username");
       if (usernameField) {
         const val = await page.$eval("#username", (el) => el.value);
@@ -764,20 +636,16 @@ async function performRelogin(page, password, isFullLogin = false) {
       }
     }
 
-    // Remplir le password
     const passwordFields = await page.$$('input[type="password"]');
     for (const field of passwordFields) {
-      const isVisible = await field.evaluate(
-        (el) => el.offsetParent !== null
-      );
+      const isVisible = await field.evaluate((el) => el.offsetParent !== null);
       if (isVisible) {
-        await field.click({ clickCount: 3 }); // Sélectionner tout
+        await field.click({ clickCount: 3 });
         await field.type(password);
         break;
       }
     }
 
-    // Chercher le bouton de connexion
     const connectBtn =
       (await page.$("#connexion")) ||
       (await page.$('button[type="submit"]')) ||
@@ -805,15 +673,13 @@ app.whenReady().then(() => {
 });
 
 // =========================
-// WINDOWS
+// FERMETURE
 // =========================
 
 app.on("window-all-closed", () => {
   stopBadgePolling();
   globalShortcut.unregisterAll();
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  if (process.platform !== "darwin") app.quit();
 });
 
 app.on("will-quit", () => {
