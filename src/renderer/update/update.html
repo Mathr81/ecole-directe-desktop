@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mise à jour</title>
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <link rel="stylesheet" href="../shared/base.css" />
+    <style>
+      /* Barre determinee : ici on connait la taille du telechargement, donc
+       * on montre l'avancement reel. C'est tout l'objet de cette fenetre :
+       * la version precedente disait "telechargement en cours" sans jamais
+       * dire ou ça en etait, ni si ça avait abouti. */
+      .ed-progress {
+        width: 100%;
+        height: 4px;
+        background: var(--ed-border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .ed-progress[hidden] {
+        display: none;
+      }
+
+      .ed-progress__fill {
+        height: 100%;
+        width: 0%;
+        background: var(--ed-accent);
+        border-radius: 2px;
+        transition: width 0.2s linear;
+      }
+
+      .ed-detail {
+        margin: 0;
+        font-size: var(--ed-font-size-sm);
+        color: var(--ed-text-muted);
+      }
+
+      .ed-detail[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ed-window">
+      <h1 class="ed-title" id="title">Mise à jour</h1>
+
+      <div class="ed-body">
+        <p class="ed-detail" id="detail" hidden></p>
+        <p class="ed-error" id="error" hidden></p>
+        <div class="ed-progress" id="progress" hidden>
+          <div class="ed-progress__fill" id="fill"></div>
+        </div>
+      </div>
+
+      <div class="ed-actions">
+        <button class="ed-btn ed-btn--quiet" id="later">Plus tard</button>
+        <button class="ed-btn ed-btn--quiet" id="manual" hidden>Ouvrir l'installateur</button>
+        <button class="ed-btn ed-btn--primary" id="install" hidden>Installer et redémarrer</button>
+      </div>
+    </div>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+
+      const el = {
+        title: document.getElementById("title"),
+        detail: document.getElementById("detail"),
+        error: document.getElementById("error"),
+        progress: document.getElementById("progress"),
+        fill: document.getElementById("fill"),
+        later: document.getElementById("later"),
+        manual: document.getElementById("manual"),
+        install: document.getElementById("install"),
+      };
+
+      // Le processus principal envoie la vue deja calculee (update-state.js) :
+      // ce renderer ne decide de rien, il peint.
+      ipcRenderer.on("update:view", (_event, view, percent) => {
+        el.title.textContent = view.title;
+
+        // Une erreur passe dans le bloc .ed-error, comme dans les fenetres
+        // de connexion et de 2FA : un seul traitement pour toute l'app.
+        el.error.hidden = !view.isError;
+        el.detail.hidden = view.isError || !view.detail;
+        if (view.isError) el.error.textContent = view.detail;
+        else el.detail.textContent = view.detail;
+
+        el.progress.hidden = !view.showProgress;
+        el.fill.style.width = `${percent || 0}%`;
+
+        el.install.hidden = !view.canInstall;
+        el.manual.hidden = !view.canOpenInstaller;
+      });
+
+      el.install.addEventListener("click", () => {
+        el.install.disabled = true;
+        el.later.disabled = true;
+        el.title.textContent = "Installation…";
+        ipcRenderer.send("update:install");
+      });
+
+      el.manual.addEventListener("click", () => ipcRenderer.send("update:open-installer"));
+      el.later.addEventListener("click", () => ipcRenderer.send("update:dismiss"));
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") ipcRenderer.send("update:dismiss");
+      });
+
+      ipcRenderer.send("update:ready");
+    </script>
+  </body>
+</html>
