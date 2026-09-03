@@ -7,6 +7,8 @@ const { initLogger } = require("./lib/logger");
 const { loadCustomExtension } = require("./features/extensions");
 const { setupAutoUpdater } = require("./features/updater");
 const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/badge");
+const { setupDownloads } = require("./features/downloads");
+const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
 const { createTwoFaWindow } = require("./windows/twofa-window");
@@ -20,7 +22,12 @@ const {
   toLocalStorageEntries,
   messagerieBadgeCount,
   messagerieBadgeFromStoredAccounts,
+  moduleBadges,
+  describeModuleBadges,
 } = require("./auth/session-payload");
+
+// Pastille des compteurs hors messagerie, en bas a gauche.
+const MODULES_NOTICE_ID = "ed-modules-notice";
 
 const LOADING_PAGE = path.join(__dirname, "..", "renderer", "loading", "loading.html");
 const HOME_URL = "https://www.ecoledirecte.com/Accueil";
@@ -414,7 +421,23 @@ async function readBadgeFromPage(mainWindow) {
 // Volontairement en dehors d'authFlow : sur un code 250, celui-ci effacerait
 // les cles fa et demanderait la question de double authentification. Un
 // rafraichissement de badge doit rester en lecture seule.
-async function readBadgeFromApi(deps) {
+/**
+ * Montre les compteurs des modules autres que la messagerie.
+ *
+ * Ces valeurs voyagent dans la reponse de login qu'on recupere DEJA pour le
+ * badge : les afficher ne declenche aucune requete de plus. La pastille
+ * disparait d'elle-meme quand il n'y a plus rien a signaler.
+ */
+function showModuleBadges(mainWindow, state) {
+  const summary = describeModuleBadges(moduleBadges(state));
+  if (!summary) {
+    clearNotice(mainWindow, MODULES_NOTICE_ID);
+    return;
+  }
+  showNotice(mainWindow, MODULES_NOTICE_ID, summary, { placement: "bottom-left" });
+}
+
+async function readBadgeFromApi(deps, mainWindow) {
   const { username, password, faKeys } = deps.credentialsStore.read();
   if (!username || !password) return null;
 
@@ -430,7 +453,9 @@ async function readBadgeFromApi(deps) {
     return null;
   }
 
-  return messagerieBadgeCount({ accounts: (res.data && res.data.accounts) || [] });
+  const fresh = { accounts: (res.data && res.data.accounts) || [] };
+  if (mainWindow) showModuleBadges(mainWindow, fresh);
+  return messagerieBadgeCount(fresh);
 }
 
 // =========================
@@ -497,6 +522,7 @@ async function main() {
     // Le compteur du badge est deja dans la reponse de login, inutile
     // d'attendre le premier scrutage du DOM.
     applyBadge(messagerieBadgeCount(state), mainWindow);
+    showModuleBadges(mainWindow, state);
   } else {
     showAuthBanner(mainWindow, "AUTH_ECHOUEE");
   }
@@ -504,10 +530,15 @@ async function main() {
   startBadgePolling({
     mainWindow,
     readLocalCount: () => readBadgeFromPage(mainWindow),
-    refreshRemoteCount: () => readBadgeFromApi(deps),
+    refreshRemoteCount: () => readBadgeFromApi(deps, mainWindow),
     initialCount: state ? messagerieBadgeCount(state) : 0,
   });
   setupAutoUpdater(mainWindow);
+
+  // Les pieces jointes d'EcoleDirecte partent directement dans le dossier
+  // Telechargements, sans boite de dialogue, avec l'avancement en bas a
+  // droite — comme dans un navigateur.
+  setupDownloads(session.defaultSession, mainWindow);
 }
 
 // =========================

@@ -133,3 +133,65 @@ test("renvoie null sur une liste de comptes vide", () => {
     null
   );
 });
+
+// ---- Badges des autres modules --------------------------------------
+//
+// Ils arrivent dans la MEME reponse de login que le compteur de la
+// messagerie : les exploiter ne coute aucune requete de plus, ce qui
+// importe puisque la cadence de sondage a ete reglee pour rester discrete
+// cote serveur.
+
+const { moduleBadges, describeModuleBadges } = require("../src/main/auth/session-payload");
+
+const withModules = (modules) => ({ accounts: [{ current: true, modules }] });
+
+test("seuls les modules a compteur non nul sont retenus", () => {
+  const badges = moduleBadges(withModules([
+    { code: "NOTES", badge: 3 },
+    { code: "VIE_SCOLAIRE", badge: 0 },
+    { code: "CAHIER_DE_TEXTE", badge: 1 },
+  ]));
+  assert.deepEqual(badges.map((b) => b.code), ["NOTES", "CAHIER_DE_TEXTE"]);
+});
+
+test("la messagerie est exclue : elle a sa propre destination", () => {
+  const badges = moduleBadges(withModules([{ code: "MESSAGERIE", badge: 4 }]));
+  assert.deepEqual(badges, []);
+});
+
+test("le libelle s'accorde en nombre", () => {
+  assert.equal(moduleBadges(withModules([{ code: "NOTES", badge: 1 }]))[0].label, "nouvelle note");
+  assert.equal(moduleBadges(withModules([{ code: "NOTES", badge: 2 }]))[0].label, "nouvelles notes");
+});
+
+test("le compte courant prime sur le premier de la liste", () => {
+  const state = { accounts: [
+    { current: false, modules: [{ code: "NOTES", badge: 9 }] },
+    { current: true, modules: [{ code: "NOTES", badge: 2 }] },
+  ] };
+  assert.equal(moduleBadges(state)[0].count, 2);
+});
+
+test("une reponse sans modules ne fait pas tomber la lecture", () => {
+  assert.deepEqual(moduleBadges({}), []);
+  assert.deepEqual(moduleBadges({ accounts: [] }), []);
+  assert.deepEqual(moduleBadges({ accounts: [{ current: true }] }), []);
+  assert.deepEqual(moduleBadges(null), []);
+});
+
+test("un badge non numerique est ignore, pas devine", () => {
+  assert.deepEqual(moduleBadges(withModules([{ code: "NOTES", badge: "3" }])), []);
+});
+
+test("rien a signaler donne une chaine vide, pas un resume vide", () => {
+  assert.equal(describeModuleBadges([]), "");
+  assert.equal(describeModuleBadges(null), "");
+});
+
+test("le resume enumere les modules", () => {
+  const badges = moduleBadges(withModules([
+    { code: "NOTES", badge: 3 },
+    { code: "CAHIER_DE_TEXTE", badge: 1 },
+  ]));
+  assert.equal(describeModuleBadges(badges), "3 nouvelles notes · 1 devoir");
+});

@@ -329,3 +329,89 @@ temporisation de `auth/expiry-watcher.js` — un code d'expiration arme, une
 réponse saine désarme, un second déclenche tout de suite. Et d'où
 l'exclusion de `login.awp` et `doubleauth` : c'est par là que passe le
 rafraîchissement du site, et sa réponse d'échec ne doit surtout pas désarmer.
+
+## Un journal bufferisé ne voit jamais la fin de l'application
+
+`initLogger` dupliquait la console vers `app.log` avec un
+`fs.createWriteStream`. Un flux Node est **bufferisé et asynchrone** : ce qui
+est écrit juste avant la mort du processus part avec le buffer.
+
+Conséquence directe : tout ce qui se journalise sur `will-quit` et `quit` —
+donc l'installation de la mise à jour, qui se fait exactement là — n'atterrit
+jamais dans le fichier. Le journal donnait l'illusion d'être complet, alors
+qu'il s'arrêtait systématiquement avant l'évènement intéressant.
+
+Les écritures sont désormais faites par `fs.appendFileSync`. Le coût est
+négligeable au volume de l'application (environ 200 Ko par an) et c'est le
+seul moyen d'avoir une trace de ce qui se passe pendant la fermeture.
+
+## L'installation silencieuse de la mise à jour échouait sans un mot
+
+Constaté le 03/09/2026, sur le passage de la 2.1.1 à la 2.2.0. Le journal
+montre trois cycles identiques :
+
+```
+19:32:26  Mise à jour v2.2.0 téléchargée.
+19:37:46  [redémarrage]           ← rien n'a été installé
+19:37:52  Mise à jour v2.2.0 téléchargée.
+19:40:20  [redémarrage]           ← toujours rien
+19:40:25  Mise à jour v2.2.0 téléchargée.
+```
+
+L'installateur téléchargé était pourtant intègre (124 195 486 octets, la
+taille exacte de l'asset GitHub), et il restait dans
+`%LOCALAPPDATA%\ecole-directe-desktop-updater\pending\` — un dossier
+qu'electron-updater nettoie après une pose réussie.
+
+Le mécanisme en cause est `autoInstallOnAppQuit`. Dans `BaseUpdater`, il pose
+un `app.once("quit")` qui appelle `install(true, false)`, c'est-à-dire
+`doInstall({ isSilent: true })`, qui lance
+`pending\…Setup-2.2.0.exe --updated /S`. Trois choses se conjuguent :
+
+- l'installateur est **assisté** (`oneClick: false` avec
+  `allowToChangeInstallationDirectory: true`), lancé en mode silencieux ;
+- toute erreur passe par `dispatchError`, donc par l'évènement `error` ;
+- le processus étant déjà en train de mourir, l'évènement n'a plus personne
+  pour l'écouter et le journal est perdu avec son buffer.
+
+L'échec était donc structurellement invisible, et l'application
+re-téléchargeait la même version à chaque démarrage.
+
+`autoInstallOnAppQuit` est désormais à `false`. La pose passe par une action
+explicite de l'utilisateur, avec `quitAndInstall(false, true)` :
+`isSilent = false` pour que l'installateur montre son interface — un échec
+devient visible — et `isForceRunAfter = true` pour que l'application se
+rouvre seule.
+
+### Détecter un échec qu'on ne peut pas observer
+
+On ne verra jamais l'installateur échouer : il tourne après la mort du
+processus. Le seul signal exploitable est de **re-télécharger une version
+déjà téléchargée**, ce qui prouve qu'on ne tourne toujours pas dessus. Le
+compteur vit dans `update-attempts.json` et est effacé dès que
+`app.getVersion()` rejoint la version attendue. À partir de deux tentatives,
+la fenêtre propose d'ouvrir l'installateur à la main.
+
+## Les bornes de fenêtre dérivent, et pas dans le sens qu'on croit
+
+En réinjectant à chaque cycle la valeur lue au cycle précédent, sous
+Windows 11 :
+
+```
+getNormalBounds     1111x777 -> 1113x779 -> 1114x780 -> stable
+getContentBounds    1111x777 -> 1112x780 -> 1112x782 -> 1112x784…
+```
+
+`useContentSize` + `getContentBounds`, qui semble pourtant le couple
+cohérent, **n'a pas de point fixe** : la fenêtre grandit de deux pixels à
+chaque ouverture, indéfiniment. `getNormalBounds` se stabilise après un
+ajustement unique de trois pixels. C'est donc lui que retient
+`main-window.js`.
+
+## Le zoom se résout sur `code`, pas sur `key`
+
+Sur un clavier AZERTY les chiffres exigent Shift : `Ctrl+0` y produit
+`input.key === "à"`. Un aiguillage sur `key` ne verrait donc jamais passer
+la remise à zéro du zoom sur le clavier de l'utilisateur. `input.code` vaut
+`"Digit0"` quelle que soit la disposition, et c'est lui qu'utilise
+`resolveShortcut` pour les trois raccourcis de zoom.

@@ -58,6 +58,46 @@ function messagerieBadgeCount(state) {
   return mod && typeof mod.badge === "number" ? mod.badge : 0;
 }
 
+// Modules dont le compteur nous interesse, avec leur libelle au singulier
+// et au pluriel. La messagerie n'y est pas : elle a son propre traitement
+// et sa propre destination, le badge de la barre des taches.
+const WATCHED_MODULES = [
+  { code: "NOTES", one: "nouvelle note", many: "nouvelles notes" },
+  { code: "VIE_SCOLAIRE", one: "élément de vie scolaire", many: "éléments de vie scolaire" },
+  { code: "CAHIER_DE_TEXTE", one: "devoir", many: "devoirs" },
+];
+
+/**
+ * Compteurs des modules autres que la messagerie.
+ *
+ * Ils sont deja dans la reponse de login qu'on recupere pour le badge :
+ * les lire ne coute AUCUNE requete supplementaire, ce qui compte ici parce
+ * que la cadence de sondage a ete choisie pour rester discrete cote
+ * serveur. Jusqu'ici cette partie de la reponse etait simplement jetee.
+ */
+function moduleBadges(state) {
+  const accounts = (state && state.accounts) || [];
+  const account = accounts.find((a) => a.current) || accounts[0];
+  if (!account || !Array.isArray(account.modules)) return [];
+
+  return WATCHED_MODULES.map(({ code, one, many }) => {
+    const mod = account.modules.find((m) => m.code === code);
+    const count = mod && typeof mod.badge === "number" ? mod.badge : 0;
+    return { code, count, label: count > 1 ? many : one };
+  }).filter((entry) => entry.count > 0);
+}
+
+/**
+ * Resume affichable, ou "" s'il n'y a rien a dire.
+ *
+ * Rendu volontairement fade : c'est une information d'appoint, elle ne doit
+ * pas concurrencer le contenu du site.
+ */
+function describeModuleBadges(badges) {
+  if (!Array.isArray(badges) || badges.length === 0) return "";
+  return badges.map((b) => `${b.count} ${b.label}`).join(" · ");
+}
+
 /**
  * Meme compteur, mais lu dans le sessionStorage de la page plutot que dans
  * une reponse de login : c'est la source gratuite, sans requete.
@@ -86,4 +126,7 @@ module.exports = {
   toSessionStorageEntries,
   toLocalStorageEntries,
   messagerieBadgeCount,
+  moduleBadges,
+  describeModuleBadges,
+  WATCHED_MODULES,
 };
