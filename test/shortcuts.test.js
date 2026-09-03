@@ -108,3 +108,61 @@ test("une entree absente ne fait pas planter", () => {
   assert.equal(resolveShortcut(null, WIN), null);
   assert.equal(resolveShortcut(undefined, WIN), null);
 });
+
+// ---- Zoom -----------------------------------------------------------
+//
+// Le zoom se resout sur `code` et non sur `key` : sur AZERTY, Ctrl+0
+// produit key "à" parce que les chiffres y exigent Shift. Un aiguillage
+// sur `key` n'aurait jamais vu passer le raccourci sur le clavier de
+// l'utilisateur.
+
+const { nextZoom, ZOOM_LADDER } = require("../src/main/features/shortcuts");
+
+test("Ctrl+0 en AZERTY, ou key vaut 'à', est bien reconnu", () => {
+  const input = { type: "keyDown", key: "à", code: "Digit0", control: true };
+  assert.equal(resolveShortcut(input, "win32"), "zoom-reset");
+});
+
+test("Ctrl+= agrandit, Ctrl+- reduit", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "=", code: "Equal", control: true }, "win32"), "zoom-in");
+  assert.equal(resolveShortcut({ type: "keyDown", key: "-", code: "Minus", control: true }, "win32"), "zoom-out");
+});
+
+test("le pave numerique fait la meme chose", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "+", code: "NumpadAdd", control: true }, "win32"), "zoom-in");
+  assert.equal(resolveShortcut({ type: "keyDown", key: "0", code: "Numpad0", control: true }, "win32"), "zoom-reset");
+});
+
+test("sans Ctrl, un tiret reste un tiret", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "-", code: "Minus" }, "win32"), null);
+});
+
+test("Cmd+- sur macOS, pas Ctrl+-", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "-", code: "Minus", meta: true }, "darwin"), "zoom-out");
+  assert.equal(resolveShortcut({ type: "keyDown", key: "-", code: "Minus", control: true }, "darwin"), null);
+});
+
+test("les paliers de zoom suivent l'echelle de Chrome", () => {
+  assert.equal(nextZoom(1, 1), 1.1);
+  assert.equal(nextZoom(1, -1), 0.9);
+  assert.equal(nextZoom(1, 0), 1);
+});
+
+test("un facteur hors palier se recale sur le plus proche", () => {
+  assert.equal(nextZoom(1.13, 1), 1.25);
+});
+
+test("les extremites de l'echelle ne debordent pas", () => {
+  assert.equal(nextZoom(ZOOM_LADDER[0], -1), ZOOM_LADDER[0]);
+  assert.equal(nextZoom(ZOOM_LADDER[ZOOM_LADDER.length - 1], 1), ZOOM_LADDER[ZOOM_LADDER.length - 1]);
+});
+
+// ---- Palette --------------------------------------------------------
+
+test("Ctrl+K ouvre la palette", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "k", control: true }, "win32"), "palette");
+});
+
+test("K seul ne fait rien", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "k" }, "win32"), null);
+});

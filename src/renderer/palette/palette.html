@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Aller à…</title>
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <link rel="stylesheet" href="../shared/base.css" />
+    <style>
+      /* Fenetre sans cadre : c'est la bordure qui la detache du fond, sinon
+       * elle se confond avec la page en dessous. */
+      body {
+        border: 1px solid var(--ed-border-strong);
+        border-top: 3px solid var(--ed-accent);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .ed-palette__input {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid var(--ed-border);
+        border-radius: 0;
+        height: 48px;
+        padding: 0 var(--ed-window-padding);
+        font-family: inherit;
+        font-size: var(--ed-title-size);
+        color: var(--ed-text);
+        background: var(--ed-surface);
+      }
+
+      .ed-palette__input:focus {
+        outline: none;
+      }
+
+      .ed-palette__list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin: 0;
+        padding: var(--ed-gap-xs) 0;
+        list-style: none;
+      }
+
+      .ed-palette__item {
+        padding: var(--ed-gap-sm) var(--ed-window-padding);
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Une seule ligne active a la fois, deplacee au clavier comme a la
+       * souris : c'est elle que Entrée valide. */
+      .ed-palette__item[aria-selected="true"] {
+        background: var(--ed-accent);
+        color: var(--ed-text-on-accent);
+      }
+
+      .ed-palette__empty {
+        padding: var(--ed-gap) var(--ed-window-padding);
+        color: var(--ed-text-muted);
+        font-size: var(--ed-font-size-sm);
+      }
+
+      .ed-palette__empty[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <input
+      class="ed-palette__input"
+      id="query"
+      type="text"
+      placeholder="Aller à…"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <ul class="ed-palette__list" id="list"></ul>
+    <p class="ed-palette__empty" id="empty" hidden>Aucune destination ne correspond.</p>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+      // Meme fonction de filtrage que le processus principal, avec ses
+      // tests : la palette ne reimplemente pas sa propre recherche.
+      const { filterEntries } = require("../../main/features/palette");
+
+      const input = document.getElementById("query");
+      const list = document.getElementById("list");
+      const empty = document.getElementById("empty");
+
+      let entries = [];
+      let shown = [];
+      let cursor = 0;
+
+      function render() {
+        shown = filterEntries(entries, input.value);
+        cursor = 0;
+        list.textContent = "";
+
+        for (const [index, entry] of shown.entries()) {
+          const li = document.createElement("li");
+          li.className = "ed-palette__item";
+          li.textContent = entry.label;
+          li.title = entry.href;
+          li.setAttribute("aria-selected", String(index === cursor));
+          li.addEventListener("mouseenter", () => select(index));
+          li.addEventListener("click", () => go(index));
+          list.appendChild(li);
+        }
+
+        empty.hidden = shown.length > 0;
+      }
+
+      function select(index) {
+        if (shown.length === 0) return;
+        cursor = (index + shown.length) % shown.length;
+        for (const [i, li] of [...list.children].entries()) {
+          li.setAttribute("aria-selected", String(i === cursor));
+        }
+        list.children[cursor]?.scrollIntoView({ block: "nearest" });
+      }
+
+      function go(index) {
+        const entry = shown[index];
+        if (entry) ipcRenderer.send("palette:go", entry.href);
+      }
+
+      ipcRenderer.on("palette:entries", (_event, received) => {
+        entries = received || [];
+        render();
+        input.focus();
+      });
+
+      input.addEventListener("input", render);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") return ipcRenderer.send("palette:close");
+        if (e.key === "ArrowDown") { e.preventDefault(); return select(cursor + 1); }
+        if (e.key === "ArrowUp") { e.preventDefault(); return select(cursor - 1); }
+        if (e.key === "Enter") { e.preventDefault(); return go(cursor); }
+      });
+    </script>
+  </body>
+</html>
