@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Téléchargements</title>
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <link rel="stylesheet" href="../shared/base.css" />
+    <style>
+      /* Panneau flottant ancre en bas a droite de la fenetre principale.
+       * Sans cadre : c'est la bordure qui le detache de la page derriere. */
+      body {
+        border: 1px solid var(--ed-border-strong);
+        border-top: 3px solid var(--ed-accent);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .dl__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--ed-gap-sm);
+        padding: var(--ed-gap-sm) var(--ed-gap);
+        border-bottom: 1px solid var(--ed-border);
+        flex-shrink: 0;
+      }
+
+      .dl__title {
+        font-size: var(--ed-font-size-sm);
+        font-weight: var(--ed-label-weight);
+        color: var(--ed-text-muted);
+      }
+
+      /* Croix de fermeture : discrete au repos, elle ne doit pas attirer
+       * l'oeil plus que le nom du fichier. */
+      .dl__close {
+        border: none;
+        background: none;
+        cursor: pointer;
+        padding: 0 var(--ed-gap-xs);
+        font-size: 16px;
+        line-height: 1;
+        color: var(--ed-text-faint);
+      }
+
+      .dl__close:hover {
+        color: var(--ed-text);
+      }
+
+      .dl__list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .dl__item {
+        padding: var(--ed-gap-sm) var(--ed-gap);
+      }
+
+      .dl__item + .dl__item {
+        border-top: 1px solid var(--ed-border);
+      }
+
+      .dl__row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--ed-gap-sm);
+      }
+
+      /* Les noms de pieces jointes d'EcoleDirecte sont longs et se
+       * ressemblent : on coupe a la fin, jamais au milieu, et le titre
+       * complet reste accessible au survol. */
+      .dl__name {
+        font-size: var(--ed-font-size-sm);
+        color: var(--ed-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+
+      .dl__actions {
+        display: flex;
+        gap: var(--ed-gap-sm);
+        flex-shrink: 0;
+      }
+
+      .dl__act {
+        border: none;
+        background: none;
+        padding: 0;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: var(--ed-font-size-sm);
+        color: var(--ed-accent);
+        white-space: nowrap;
+      }
+
+      .dl__act:hover {
+        color: var(--ed-accent-hover);
+        text-decoration: underline;
+      }
+
+      .dl__bar {
+        height: 3px;
+        margin-top: var(--ed-gap-xs);
+        background: var(--ed-border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .dl__bar[hidden] {
+        display: none;
+      }
+
+      .dl__fill {
+        height: 100%;
+        width: 0;
+        background: var(--ed-accent);
+        border-radius: 2px;
+        transition: width 0.15s linear;
+      }
+
+      /* Taille inconnue : le serveur n'annonce pas toujours de
+       * Content-Length. Plutot qu'un pourcentage invente, la barre defile. */
+      .dl__fill--unknown {
+        width: 35%;
+        animation: dl-slide 1.1s ease-in-out infinite alternate;
+      }
+
+      @keyframes dl-slide {
+        from { transform: translateX(-100%); }
+        to   { transform: translateX(286%); }
+      }
+
+      .dl__detail {
+        display: block;
+        margin-top: var(--ed-gap-xs);
+        font-size: 11px;
+        color: var(--ed-text-muted);
+      }
+
+      .dl__item--failed .dl__detail {
+        color: var(--ed-danger-field-border);
+      }
+
+      .dl__empty {
+        margin: 0;
+        padding: var(--ed-gap) var(--ed-gap);
+        font-size: var(--ed-font-size-sm);
+        color: var(--ed-text-muted);
+      }
+
+      .dl__empty[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dl__head">
+      <span class="dl__title">Téléchargements</span>
+      <button class="dl__close" id="close" aria-label="Fermer" title="Fermer">&times;</button>
+    </div>
+    <ul class="dl__list" id="list"></ul>
+    <p class="dl__empty" id="empty" hidden>Aucun téléchargement.</p>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+
+      const list = document.getElementById("list");
+      const empty = document.getElementById("empty");
+
+      // Les vues arrivent deja calculees par le processus principal
+      // (describeDownload) : ce renderer ne decide de rien, il peint.
+      ipcRenderer.on("downloads:state", (_event, views) => {
+        list.textContent = "";
+
+        for (const view of views) {
+          const li = document.createElement("li");
+          li.className = "dl__item";
+          if (view.state === "cancelled" || view.state === "interrupted") {
+            li.classList.add("dl__item--failed");
+          }
+
+          const row = document.createElement("div");
+          row.className = "dl__row";
+
+          const name = document.createElement("span");
+          name.className = "dl__name";
+          name.textContent = view.name;
+          name.title = view.name;
+          row.appendChild(name);
+
+          const actions = document.createElement("div");
+          actions.className = "dl__actions";
+          if (view.canCancel) actions.appendChild(action("Annuler", "downloads:cancel", view.id));
+          if (view.canOpen) {
+            actions.appendChild(action("Ouvrir", "downloads:open", view.id));
+            actions.appendChild(action("Dossier", "downloads:reveal", view.id));
+          }
+          row.appendChild(actions);
+          li.appendChild(row);
+
+          // La barre ne sert qu'a ce qui progresse : une fois termine, elle
+          // ne dirait plus rien que le detail ne dit deja.
+          const bar = document.createElement("div");
+          bar.className = "dl__bar";
+          bar.hidden = view.state !== "progressing";
+          const fill = document.createElement("div");
+          fill.className = "dl__fill";
+          if (view.percent === null) fill.classList.add("dl__fill--unknown");
+          else fill.style.width = `${view.percent}%`;
+          bar.appendChild(fill);
+          li.appendChild(bar);
+
+          const detail = document.createElement("span");
+          detail.className = "dl__detail";
+          detail.textContent = view.percent !== null && view.state === "progressing"
+            ? `${view.percent} % — ${view.detail}`
+            : view.detail;
+          li.appendChild(detail);
+
+          list.appendChild(li);
+        }
+
+        empty.hidden = views.length > 0;
+        // Le processus principal ne peut pas connaitre la hauteur du
+        // contenu : c'est le renderer qui signale qu'il a fini de peindre.
+        ipcRenderer.send("downloads:rendered");
+      });
+
+      function action(label, channel, id) {
+        const button = document.createElement("button");
+        button.className = "dl__act";
+        button.textContent = label;
+        button.addEventListener("click", () => ipcRenderer.send(channel, id));
+        return button;
+      }
+
+      document.getElementById("close")
+        .addEventListener("click", () => ipcRenderer.send("downloads:dismiss"));
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") ipcRenderer.send("downloads:dismiss");
+      });
+
+      ipcRenderer.send("downloads:ready");
+    </script>
+  </body>
+</html>

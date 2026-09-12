@@ -415,3 +415,96 @@ Sur un clavier AZERTY les chiffres exigent Shift : `Ctrl+0` y produit
 la remise à zéro du zoom sur le clavier de l'utilisateur. `input.code` vaut
 `"Digit0"` quelle que soit la disposition, et c'est lui qu'utilise
 `resolveShortcut` pour les trois raccourcis de zoom.
+
+## Un téléchargement laissait une fenêtre blanche derrière lui
+
+Signalé le 12/09/2026. Ouvrir une pièce jointe téléchargeait bien le
+fichier, mais laissait aussi une fenêtre entièrement blanche à l'écran.
+
+L'enchaînement, reproduit sur un serveur local qui répond
+`Content-Disposition: attachment` :
+
+1. le lien de la pièce jointe porte `target="_blank"` ;
+2. `setWindowOpenHandler` de la fenêtre principale n'y reconnaît ni
+   `blob:`, ni `data:`, ni l'API — il ouvre donc un popup ;
+3. la `<webview>` du popup tente la navigation ;
+4. le serveur annonce une pièce jointe, Chromium convertit la navigation en
+   téléchargement et l'abandonne ;
+5. la webview reste sur `about:blank`, et le popup demeure affiché, vide.
+
+Mesuré sous Electron 44 dans `will-download` : le `webContents`
+initiateur est de type `"webview"`, son `getURL()` rend la chaîne vide, et
+`BrowserWindow.fromWebContents()` sur ce guest renvoie **directement la
+fenêtre popup** qui le contient — pas besoin de passer par
+`hostWebContents`. C'est ce qui permet de refermer précisément la bonne
+fenêtre. Une webview qui porte déjà une URL est laissée tranquille : c'est
+une vraie session de navigation, où l'utilisateur télécharge peut-être
+depuis une page qu'il consulte.
+
+Effet de bord non corrigible : Electron journalise sur sa sortie d'erreur
+un `Error occurred in handler for 'GUEST_VIEW_MANAGER_CALL': ERR_FAILED`
+chaque fois qu'une navigation de `<webview>` devient un téléchargement.
+Le message vient du code interne d'Electron, ne passe pas par `console.*`
+— il n'atterrit donc pas dans `app.log` — et n'est pas visible pour
+l'utilisateur.
+
+## Un élément injecté dans la page ne peut porter aucun bouton
+
+La première version du suivi de téléchargement posait un bandeau dans le
+document du site via `executeJavaScript`. Ce code s'exécute dans le monde
+principal de la page : il n'a ni `ipcRenderer`, ni accès au processus
+principal. Le bandeau ne pouvait donc rien déclencher — d'où
+l'impossibilité d'annuler un téléchargement en cours.
+
+Le panneau est maintenant une fenêtre maison
+(`src/main/windows/downloads-window.js`), ancrée en bas à droite de la
+fenêtre principale et affichée par `showInactive()` pour ne jamais voler
+le focus. Les avis purement informatifs, eux, continuent de passer par
+`page-notice.js`.
+
+## `fitWindowToContent` ne sait que faire GRANDIR une fenêtre
+
+Il mesure le déficit du conteneur `.ed-body`, soit
+`scrollHeight - clientHeight`. Deux conséquences :
+
+- une page sans élément `.ed-body` mesure un déficit nul, et la fenêtre ne
+  bouge pas — c'est ce qui laissait le panneau de téléchargement à sa
+  hauteur initiale, avec une barre de défilement et la dernière ligne
+  coupée ;
+- un déficit ne peut pas être négatif, donc la fonction ne rétrécit
+  jamais rien.
+
+Le panneau de téléchargement passe d'une ligne à trois puis revient à une :
+il a besoin des deux sens. Il fait donc sa propre mesure, en additionnant
+la hauteur de son en-tête et le `scrollHeight` de sa liste, lequel donne la
+hauteur réelle du contenu sans se laisser borner par la hauteur visible.
+
+## Electron annonce 0 octet reçu pendant la première seconde
+
+En sondant l'objet `DownloadItem` lui-même, indépendamment de toute
+interface, sur un téléchargement de 8 Mio débité lentement :
+
+```
+t=400ms    recu=0
+t=800ms    recu=0
+t=1200ms   recu=2097152    (25 %)
+t=2000ms   recu=2883584    (34 %)
+```
+
+Les deux premiers `updated` rapportent zéro. Un test d'avancement qui
+échantillonne avant une seconde mesure donc le tampon de Chromium, pas
+l'affichage — et échoue pour de mauvaises raisons.
+
+## Un facteur de zoom capturé dans une fermeture est un piège
+
+Chromium remet le zoom à 1 à chaque changement de document, et le SPA
+navigue beaucoup : il faut donc le reposer sur `did-finish-load`. La
+première version capturait la valeur enregistrée dans un `const` à la
+création de la fenêtre. Le raccourci écrivait bien la nouvelle valeur sur
+le disque, mais la fermeture gardait l'ancienne et la réappliquait à chaque
+navigation : changer de page avec Ctrl+K annulait le zoom en cours pour
+revenir à celui du démarrage.
+
+La valeur courante doit être mutable et mise à jour par tous les chemins
+qui la changent — les raccourcis, mais aussi `zoom-changed`, qu'émet
+Chromium sur un Ctrl+molette.
