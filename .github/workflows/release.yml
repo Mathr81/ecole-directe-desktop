@@ -194,3 +194,21 @@ jobs:
           gh release edit "${GITHUB_REF_NAME}" \
             --notes-file release_notes.md \
             --repo "${{ github.repository }}"
+      # electron-builder cree la release en BROUILLON, et electron-updater
+      # ignore les brouillons : sans cette etape, la mise a jour n'atteint
+      # jamais personne, et il faut la publier a la main.
+      #
+      # Conditionnee a la reussite des TROIS builds : publier une release
+      # amputee d'un installeur serait pire que la laisser en brouillon,
+      # puisque les clients de l'OS manquant chercheraient un fichier absent.
+      - name: Publish the release
+        if: needs.build.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${GITHUB_REF_NAME}" --draft=false --latest --repo "${{ github.repository }}"
+
+      - name: Warn when the release stays a draft
+        if: needs.build.result != 'success'
+        run: |
+          echo "::warning::Un build a echoue. La release ${GITHUB_REF_NAME} reste en brouillon et devra etre publiee a la main."
