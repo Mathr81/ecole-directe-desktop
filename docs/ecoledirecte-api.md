@@ -508,3 +508,70 @@ revenir à celui du démarrage.
 La valeur courante doit être mutable et mise à jour par tous les chemins
 qui la changent — les raccourcis, mais aussi `zoom-changed`, qu'émet
 Chromium sur un Ctrl+molette.
+
+## `setWindowOpenHandler` est attaché à un webContents, pas à l'application
+
+C'est la cause des deux fenêtres parasites rapportées le 12/09/2026, et la
+première tentative de correction avait visé à côté faute d'avoir vu ça.
+
+La politique d'ouverture vivait en ligne dans `main-window.js`, donc posée
+sur la seule fenêtre principale. Tout autre contexte retombait sur le
+comportement par défaut d'Electron : une fenêtre nue.
+
+Le cas le plus net est la `<webview>` du popup. Elle porte `allowpopups`
+mais n'héritait d'aucune politique, si bien qu'un lien cliqué dedans
+ouvrait une fenêtre sans barre d'adresse ni boutons Copier / Navigateur.
+Vérifié en rejouant le cas :
+
+```
+avant   fenetre#2  boutons []                           → FENETRE NUE
+après   fenetre#2  boutons ["Copier","Navigateur","×"]   → POPUP MAISON
+```
+
+La politique vit désormais dans `src/main/windows/window-policy.js` et est
+appliquée à la fenêtre principale, aux invités `<webview>` des popups, et
+aux fenêtres qu'Electron crée lui-même sur un verdict « allow » — sans quoi
+un lien parti de l'une d'elles rouvrait une fenêtre nue.
+
+`openPopup` lui est injecté : c'est `popup-window.js` qui sait fabriquer un
+popup, et il applique lui-même la politique à ses invités. L'injecter évite
+le cycle d'imports.
+
+## Une fenêtre ouverte sur un `blob:` est toujours morte
+
+Le mécanisme réel de téléchargement d'ÉcoleDirecte, relevé sur le site :
+
+```
+POST api.ecoledirecte.com/v3/telechargement.awp?verbe=get&fichierId=2149
+GET  blob:https://www.ecoledirecte.com/954f4333-0461-4f8a-abf1-d50df255de48
+GET  assets/locale/fr/viewer.ftl                          (PDF.js)
+```
+
+Dans un navigateur, le document s'affiche en ligne dans une iframe PDF.js —
+aucune fenêtre ne s'ouvre. Dans Electron, l'URL `blob:` tombait sur
+`action: "allow"`, et la fenêtre obtenue est **définitivement vide** :
+
+```
+titre ""   enfants du body []   texte ""   taille du HTML 159 octets
+```
+
+Electron n'y peint pas le PDF et ne le télécharge pas non plus. C'était la
+fenêtre blanche.
+
+`blob:` et `data:` sont donc refusés. On ne télécharge pas le blob à la
+place, même si `contents.downloadURL(url)` en est capable — essayé, ça
+fonctionne — car le fichier arrive déjà par le chemin `<a download>` de la
+page avec son vrai nom (`_1518066406.pdf` dans les journaux), alors que
+`downloadURL` sur un blob ne dispose que de son UUID et produirait un
+doublon nommé `9ec8126c-04aa-43dd-99ac-b473c1c11a97.pdf`.
+
+Refuser ne perd rien, et c'est l'argument décisif : cette fenêtre ne
+rendait aucun fichier.
+
+## Un blob n'est lisible que par le renderer qui l'a créé
+
+Corollaire utile : on ne peut pas afficher un `blob:` d'une page dans la
+`<webview>` d'un popup, ni le charger depuis une autre fenêtre. Seul le
+renderer d'origine — ou une fenêtre qu'il ouvre dans le même processus — y
+a accès. C'est pourquoi `contents.downloadURL` doit être appelé sur **ce**
+webContents, et pas sur un autre.

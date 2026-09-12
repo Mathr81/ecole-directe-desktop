@@ -3,6 +3,7 @@ const path = require("path");
 const { getAssetPath } = require("../lib/paths");
 const { registerWindowShortcuts } = require("../features/shortcuts");
 const { loadWindowState, saveWindowState } = require("../lib/window-state");
+const { applyWindowPolicy } = require("./window-policy");
 
 const MIN_WIDTH = 520;
 const MIN_HEIGHT = 360;
@@ -66,6 +67,14 @@ function createPopupWindow(url) {
   popup.on("closed", () => ipcMain.removeListener("popup-copy-url", copyUrl));
 
   registerWindowShortcuts(popup);
+
+  // La <webview> porte allowpopups mais n'heritait d'aucune politique : un
+  // lien clique dedans ouvrait donc une fenetre nue, sans barre d'adresse
+  // ni actions. Elle ouvre maintenant un popup habille, comme la fenetre
+  // principale.
+  popup.webContents.on("did-attach-webview", (_event, guest) => {
+    applyWindowPolicy(guest, { openPopup: createPopupWindow });
+  });
 
   popup.on("resize", () => {
     if (popup.isDestroyed() || popup.isMaximized() || popup.isMinimized()) return;

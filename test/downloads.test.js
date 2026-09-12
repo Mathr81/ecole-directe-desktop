@@ -70,13 +70,50 @@ test("une webview qui consulte une page n'est pas fermee", () => {
   );
 });
 
-test("la fenetre principale n'est jamais fermee", () => {
+test("une fenetre ordinaire vierge n'est pas fermee sans plus d'indices", () => {
+  // C'est la fenetre principale, ou une fenetre que nous avons fabriquee :
+  // on n'y touche pas sur le seul fait qu'elle soit vierge.
   assert.equal(shouldCloseInitiator({ type: "window", url: "" }), false);
 });
 
 test("un initiateur absent ou inconnu ne declenche rien", () => {
   assert.equal(shouldCloseInitiator(null), false);
   assert.equal(shouldCloseInitiator({}), false);
+});
+
+// ---- Le cas reel d'EcoleDirecte : une piece jointe en blob: -----------
+//
+// La piece jointe passe par POST telechargement.awp puis une URL blob:.
+// Celle-ci est autorisee (la refuser casserait le telechargement), Electron
+// ouvre donc une fenetre, n'arrive pas a peindre le PDF, convertit en
+// telechargement — et laisse la fenetre blanche a l'ecran.
+
+test("la fenetre ouverte par Electron sur un blob: est refermee", () => {
+  assert.equal(
+    shouldCloseInitiator(
+      { type: "window", url: "blob:https://www.ecoledirecte.com/954f4333-0461" },
+      { autoCreated: true }
+    ),
+    true
+  );
+});
+
+test("idem pour un data: et pour une fenetre restee vierge", () => {
+  assert.equal(shouldCloseInitiator({ type: "window", url: "data:application/pdf;base64,AA" }, { autoCreated: true }), true);
+  assert.equal(shouldCloseInitiator({ type: "window", url: "" }, { autoCreated: true }), true);
+  assert.equal(shouldCloseInitiator({ type: "window", url: "about:blank" }, { autoCreated: true }), true);
+});
+
+test("une fenetre qui affiche une vraie page reste ouverte", () => {
+  // Meme creee par Electron : l'utilisateur est peut-etre en train de la
+  // lire, et un telechargement peut tres bien en partir.
+  assert.equal(
+    shouldCloseInitiator(
+      { type: "window", url: "https://api.ecoledirecte.com/v3/quelquechose" },
+      { autoCreated: true }
+    ),
+    false
+  );
 });
 
 // ---- Vue du panneau ---------------------------------------------------
@@ -141,4 +178,39 @@ test("un parent sur un ecran a gauche donne des coordonnees negatives valides", 
 test("les positions sont arrondies a l'entier", () => {
   const pos = anchorPosition({ x: 0.4, y: 0.6, width: 1000, height: 800 }, { width: 340, height: 120 }, 16);
   assert.ok(Number.isInteger(pos.x) && Number.isInteger(pos.y));
+});
+
+// ---- Politique d'ouverture de fenetre --------------------------------
+//
+// Elle etait ecrite en ligne dans main-window.js, donc posee sur la seule
+// fenetre principale. Tout autre contexte — la <webview> d'un popup, par
+// exemple — retombait sur le defaut d'Electron : une fenetre nue.
+
+const { decideWindowOpen } = require("../src/main/windows/window-policy");
+
+test("un lien externe ouvre notre popup habille", () => {
+  assert.equal(decideWindowOpen("https://example.com/page"), "popup");
+});
+
+test("les schemas internes sont laisses a Electron", () => {
+  assert.equal(decideWindowOpen("about:blank"), "allow");
+  assert.equal(decideWindowOpen("devtools://devtools/bundled/x.html"), "allow");
+});
+
+test("blob: et data: n'ouvrent plus de fenetre : elle est toujours morte", () => {
+  // Mesure du 12/09/2026 : le document d'une fenetre ouverte sur un blob de
+  // PDF est un squelette vide de 159 octets. Aucun fichier n'en sort, donc
+  // refuser ne perd rien — et evite la fenetre blanche.
+  assert.equal(decideWindowOpen("blob:https://www.ecoledirecte.com/954f4333"), "deny");
+  assert.equal(decideWindowOpen("data:application/pdf;base64,AAAA"), "deny");
+});
+
+test("l'API EcoleDirecte est autorisee", () => {
+  assert.equal(decideWindowOpen("https://api.ecoledirecte.com/v3/telechargement.awp"), "allow");
+});
+
+test("une URL absente ou vide n'ouvre rien", () => {
+  assert.equal(decideWindowOpen(""), "deny");
+  assert.equal(decideWindowOpen(null), "deny");
+  assert.equal(decideWindowOpen(undefined), "deny");
 });

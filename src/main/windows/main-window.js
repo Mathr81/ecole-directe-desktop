@@ -5,6 +5,7 @@ const { registerWindowShortcuts, runShortcut } = require("../features/shortcuts"
 const { loadWindowState, saveWindowState } = require("../lib/window-state");
 const { createPopupWindow } = require("./popup-window");
 const { showPalette } = require("./palette-window");
+const { applyWindowPolicy } = require("./window-policy");
 
 const DEFAULT_WIDTH = 1400;
 const DEFAULT_HEIGHT = 900;
@@ -104,25 +105,10 @@ function createMainWindow() {
     });
   });
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("about:") || url.startsWith("devtools:")) {
-      return { action: "allow" };
-    }
-
-    // blob: et data: sont des telechargements generes par la page.
-    // Electron ne sait pas les telecharger directement, on laisse la
-    // page les gerer elle-meme.
-    if (url.startsWith("blob:") || url.startsWith("data:")) {
-      return { action: "allow" };
-    }
-
-    if (url.includes("api.ecoledirecte.com")) {
-      return { action: "allow" };
-    }
-
-    createPopupWindow(url);
-    return { action: "deny" };
-  });
+  // La politique vit dans window-policy.js et s'applique aussi aux invites
+  // <webview> des popups : la poser ici seulement laissait tout autre
+  // contexte ouvrir des fenetres nues.
+  applyWindowPolicy(mainWindow.webContents, { openPopup: createPopupWindow });
 
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.webContents.executeJavaScript(`

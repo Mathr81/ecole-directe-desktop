@@ -21,6 +21,7 @@ const {
   showDownloads, getDownloadsWindow, hideDownloads,
   fitDownloads,
 } = require("../windows/downloads-window");
+const { isAutoCreated } = require("../windows/window-policy");
 
 // Delai avant que le panneau s'efface, une fois tout termine. Assez long
 // pour laisser le temps de cliquer sur « Ouvrir ».
@@ -59,24 +60,32 @@ function formatBytes(bytes) {
 /**
  * Faut-il fermer la fenetre qui a declenche ce telechargement ?
  *
- * Quand EcoleDirecte ouvre une piece jointe en target="_blank", le
- * gestionnaire de la fenetre principale ouvre un popup, dont la <webview>
- * tente la navigation. Le serveur repondant « Content-Disposition:
- * attachment », la navigation est convertie en telechargement et la webview
- * reste sur about:blank : le popup demeure affiche, desesperement blanc.
+ * Deux façons de se retrouver avec une fenetre vide a l'ecran apres un
+ * telechargement, toutes deux constatees :
  *
- * Mesure faite sous Electron 44 en rejouant le cas : le webContents
- * initiateur est alors de type "webview", son URL est la chaine vide, et
- * BrowserWindow.fromWebContents sur ce guest renvoie bien la fenetre popup
- * qui le contient.
+ *   - une <webview> de popup qui tente la navigation, recoit un
+ *     « Content-Disposition: attachment » et reste donc sur about:blank ;
+ *   - une fenetre ouverte par Electron sur un blob:, cas des pieces jointes
+ *     EcoleDirecte : le PDF n'est pas peint, la navigation devient un
+ *     telechargement, et la fenetre reste blanche.
  *
- * Une webview qui porte DEJA une URL est une vraie session de navigation :
- * on n'y touche pas, l'utilisateur telecharge peut-etre depuis une page
- * qu'il est en train de consulter.
+ * Le critere commun est qu'elle n'a JAMAIS eu de document exploitable. Une
+ * fenetre qui affiche une vraie page est laissee tranquille, meme si un
+ * telechargement en part : l'utilisateur est peut-etre en train de la lire.
  */
-function shouldCloseInitiator(info) {
-  if (!info || info.type !== "webview") return false;
-  return info.url === "" || info.url === "about:blank";
+function shouldCloseInitiator(info, { autoCreated = false } = {}) {
+  if (!info || typeof info.url !== "string") return false;
+
+  const vierge = info.url === "" || info.url === "about:blank";
+  if (info.type === "webview") return vierge;
+
+  // Une fenetre nee d'un « allow » n'a d'existence que le temps de cette
+  // navigation : si elle est vierge, ou si elle ne porte que l'URL qu'on
+  // telecharge, elle ne sert plus a rien.
+  if (autoCreated) {
+    return vierge || info.url.startsWith("blob:") || info.url.startsWith("data:");
+  }
+  return false;
 }
 
 /** Vue destinee au panneau : le renderer ne calcule rien. */
@@ -152,12 +161,23 @@ function setupDownloads(targetSession, mainWindow, deps = {}) {
     // Referme le popup laisse blanc derriere le telechargement.
     if (initiator && !initiator.isDestroyed()) {
       const info = { type: initiator.getType(), url: initiator.getURL() };
-      if (shouldCloseInitiator(info)) {
-        const host = BrowserWindow.fromWebContents(initiator);
-        if (host && host !== mainWindow && !host.isDestroyed()) {
-          console.log("Fenêtre restée blanche derrière un téléchargement : fermeture.");
-          host.close();
-        }
+
+      // Journalise TOUJOURS l'initiateur : c'est la seule facon de savoir
+      // par quel chemin un telechargement est arrive, et donc quelle
+      // fenetre reste eventuellement ouverte derriere lui. Sans cette
+      // ligne, la premiere tentative de correction a visé à côté.
+      console.log(
+        `Initiateur du téléchargement : type=${info.type} url=${JSON.stringify(info.url.slice(0, 120))}`
+        + ` fenetre=${(() => { const w = BrowserWindow.fromWebContents(initiator); return w ? (w === mainWindow ? "principale" : `autre#${w.id}`) : "aucune"; })()}`
+        + ` fenetres_ouvertes=${BrowserWindow.getAllWindows().length}`
+      );
+
+      const host = BrowserWindow.fromWebContents(initiator);
+      // La fenetre principale n'est jamais fermee, quoi qu'il arrive.
+      if (host && host !== mainWindow && !host.isDestroyed()
+          && shouldCloseInitiator(info, { autoCreated: isAutoCreated(host) })) {
+        console.log("Fenêtre restée vide derrière un téléchargement : fermeture.");
+        host.close();
       }
     }
 
