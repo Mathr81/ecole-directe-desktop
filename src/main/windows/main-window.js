@@ -73,9 +73,35 @@ function createMainWindow() {
   //
   // Le facteur se pose apres chaque chargement : Chromium le remet a 1 en
   // changeant de document, et le SPA navigue beaucoup.
-  const zoom = saved ? saved.zoom : 1;
-  mainWindow.webContents.on("did-finish-load", () => {
-    if (zoom !== 1) mainWindow.webContents.setZoomFactor(zoom);
+  //
+  // MUTABLE, et c'est tout l'enjeu : la version precedente capturait la
+  // valeur enregistree dans un `const` a la creation de la fenetre. Le
+  // raccourci ecrivait bien la nouvelle valeur sur le disque, mais la
+  // fermeture capturee gardait l'ancienne et la reappliquait a chaque
+  // navigation. Changer de page avec Ctrl+K annulait donc le zoom en
+  // cours pour revenir a celui du demarrage.
+  let currentZoom = saved ? saved.zoom : 1;
+
+  const applyZoom = () => {
+    if (mainWindow.isDestroyed()) return;
+    mainWindow.webContents.setZoomFactor(currentZoom);
+  };
+
+  const rememberZoom = (factor) => {
+    currentZoom = factor;
+    saveWindowState("main", { zoom: factor });
+  };
+
+  mainWindow.webContents.on("did-finish-load", applyZoom);
+
+  // Ctrl+molette est traite par Chromium lui-meme : sans cette ecoute, un
+  // zoom fait a la molette serait perdu a la navigation suivante, puisque
+  // seul le chemin des raccourcis mettait `currentZoom` a jour.
+  mainWindow.webContents.on("zoom-changed", () => {
+    // La valeur n'est lisible qu'apres que Chromium l'a appliquee.
+    setImmediate(() => {
+      if (!mainWindow.isDestroyed()) rememberZoom(mainWindow.webContents.getZoomFactor());
+    });
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -126,7 +152,7 @@ function createMainWindow() {
       // que c'est cette fenetre — et elle seule — qui sait le conserver.
       if (action.startsWith("zoom-")) {
         runShortcut(action, contents);
-        saveWindowState("main", { zoom: contents.getZoomFactor() });
+        rememberZoom(contents.getZoomFactor());
         return true;
       }
       return false;

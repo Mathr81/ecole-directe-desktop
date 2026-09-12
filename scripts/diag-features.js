@@ -77,6 +77,36 @@ app.whenReady().then(async () => {
   } catch (err) {
     check("createMainWindow restaure la taille enregistree", false, err.message);
   }
+  // ---- Le zoom survit-il a une navigation ? --------------------------
+  //
+  // Defaut rapporte le 12/09/2026 : changer de page avec Ctrl+K rendait le
+  // zoom du demarrage. On passe par sendInputEvent pour emprunter le vrai
+  // chemin (before-input-event -> resolveShortcut -> onAction), et non pas
+  // setZoomFactor directement, qui ne prouverait rien.
+  if (mainWin && !mainWin.isDestroyed()) {
+    try {
+      await mainWin.loadURL("data:text/html,<p>page une</p>");
+      mainWin.webContents.setZoomFactor(1);
+
+      for (let i = 0; i < 2; i += 1) {
+        mainWin.webContents.sendInputEvent({
+          type: "keyDown", keyCode: "=", code: "Equal", modifiers: ["control"],
+        });
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      const zoomed = mainWin.webContents.getZoomFactor();
+      check("Ctrl+= agrandit par le chemin des raccourcis", zoomed > 1.01, zoomed.toFixed(3));
+
+      await mainWin.loadURL("data:text/html,<p>page deux</p>");
+      await new Promise((r) => setTimeout(r, 250));
+      const after = mainWin.webContents.getZoomFactor();
+      check("le zoom survit a une navigation", Math.abs(after - zoomed) < 0.001,
+        `avant ${zoomed.toFixed(3)} / apres ${after.toFixed(3)}`);
+    } catch (err) {
+      check("le zoom survit a une navigation", false, err.message);
+    }
+  }
+
   if (mainWin && !mainWin.isDestroyed()) mainWin.destroy();
 
   // ---- Telechargements ------------------------------------------------
