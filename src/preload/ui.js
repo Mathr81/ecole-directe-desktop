@@ -18,6 +18,7 @@ const SEND = new Set([
   "update:install",
   "update:open-installer",
   "update:dismiss",
+  "update:download-page",
 ]);
 
 const RECEIVE = new Set([

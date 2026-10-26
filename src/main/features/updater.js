@@ -6,6 +6,12 @@ const { createUpdateState, describe, nextAttempt, installLooksBroken } = require
 const { showUpdateWindow, getUpdateWindow, closeUpdateWindow } = require("../windows/update-window");
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const RELEASES_URL = "https://github.com/Mathr81/ecole-directe-desktop/releases/latest";
+
+// macOS refuse d'installer la mise a jour d'une application non signee, et
+// le build n'est pas signe (pas de certificat Apple). Telecharger pour rien
+// serait pire que de le dire : on montre la version et la page ou la prendre.
+const MANUAL_ONLY = process.platform === "darwin";
 
 // Suivi des tentatives d'installation, dans son propre fichier : rien de
 // sensible, et separe de window-state.json qui a une autre duree de vie.
@@ -54,7 +60,10 @@ function setupAutoUpdater(mainWindow) {
   // app.log. C'est la seule trace exploitable de ce qui se passe a la
   // fermeture, d'ou l'ecriture synchrone cote logger.
   autoUpdater.logger = console;
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = !MANUAL_ONLY;
+  // La verification horaire ne doit pas rouvrir la fenetre a chaque fois
+  // pour la meme version.
+  let manualShownFor = null;
 
   // DELIBEREMENT false. La pose silencieuse a la fermeture (`--updated /S`)
   // echouait sans un mot : le processus etant deja mort, ni l'erreur ni le
@@ -90,6 +99,12 @@ function setupAutoUpdater(mainWindow) {
 
   autoUpdater.on("update-available", (info) => {
     console.log(`Mise à jour disponible : v${info.version}`);
+    if (MANUAL_ONLY) {
+      state.manual(info.version);
+      render({ open: manualShownFor !== info.version });
+      manualShownFor = info.version;
+      return;
+    }
     state.available(info.version);
     render();
   });
@@ -166,6 +181,11 @@ function setupAutoUpdater(mainWindow) {
   });
 
   ipcMain.on("update:dismiss", () => closeUpdateWindow());
+
+  ipcMain.on("update:download-page", () => {
+    shell.openExternal(RELEASES_URL).catch((err) => console.error("Page des versions inaccessible :", err.message));
+    closeUpdateWindow();
+  });
 
   // ---- Cadence -------------------------------------------------------
 

@@ -105,3 +105,13 @@ test("a jour : rien a proposer", () => {
   assert.equal(view.canInstall, false);
   assert.equal(view.isError, false);
 });
+
+test("macOS : une version disponible se telecharge a la main", () => {
+  const state = createUpdateState();
+  state.manual("2.5.0");
+  const view = describe(state.value);
+  assert.equal(view.title, "Mise à jour v2.5.0 disponible");
+  assert.equal(view.canDownload, true);
+  assert.equal(view.canInstall, false);
+  assert.equal(view.showProgress, false);
+});

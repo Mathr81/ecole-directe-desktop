@@ -37,6 +37,8 @@ function createUpdateState() {
     checking: () => set({ phase: "checking", message: "" }),
     upToDate: () => set({ phase: "up-to-date", message: "" }),
     available: (version) => set({ phase: "available", version, percent: 0, message: "" }),
+    // Disponible, mais a installer a la main (macOS, application non signee).
+    manual: (version) => set({ phase: "manual", version, percent: 0, message: "" }),
     // Le pourcentage est borne : electron-updater peut renvoyer un flottant
     // legerement superieur a 100 sur le dernier morceau.
     progress: (percent) => set({
@@ -66,6 +68,12 @@ function describe(state) {
       return { title: `Mise à jour ${version} disponible`, detail: "Téléchargement en cours…", showProgress: true, canInstall: false, canOpenInstaller: false, isError: false };
     case "downloading":
       return { title: `Téléchargement de ${version}`, detail: `${state.percent} %`, showProgress: true, canInstall: false, canOpenInstaller: false, isError: false };
+    case "manual":
+      return {
+        title: `Mise à jour ${version} disponible`,
+        detail: "Sur macOS, elle s'installe à la main : télécharge le .dmg depuis la page des versions, puis remplace l'application.",
+        showProgress: false, canInstall: false, canOpenInstaller: false, canDownload: true, isError: false,
+      };
     case "downloaded":
       return installLooksBroken({ version: state.version, attempts: state.attempts })
         ? {

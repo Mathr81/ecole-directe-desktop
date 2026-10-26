@@ -57,6 +57,7 @@
         <button class="ed-btn ed-btn--quiet" id="later">Plus tard</button>
         <button class="ed-btn ed-btn--quiet" id="manual" hidden>Ouvrir l'installateur</button>
         <button class="ed-btn ed-btn--primary" id="install" hidden>Installer et redémarrer</button>
+        <button class="ed-btn ed-btn--primary" id="download" hidden>Télécharger</button>
       </div>
     </div>
 
@@ -72,6 +73,7 @@
         later: document.getElementById("later"),
         manual: document.getElementById("manual"),
         install: document.getElementById("install"),
+        download: document.getElementById("download"),
       };
 
       // Le processus principal envoie la vue deja calculee (update-state.js) :
@@ -91,6 +93,7 @@
 
         el.install.hidden = !view.canInstall;
         el.manual.hidden = !view.canOpenInstaller;
+        el.download.hidden = !view.canDownload;
       });
 
       el.install.addEventListener("click", () => {
@@ -101,6 +104,7 @@
       });
 
       el.manual.addEventListener("click", () => ipc.send("update:open-installer"));
+      el.download.addEventListener("click", () => ipc.send("update:download-page"));
       el.later.addEventListener("click", () => ipc.send("update:dismiss"));
 
       document.addEventListener("keydown", (e) => {
