@@ -99,6 +99,22 @@ function applyWindowPolicy(contents, { openPopup }) {
   contents.on("did-create-window", (win) => {
     autoCreated.add(win);
     applyWindowPolicy(win.webContents, { openPopup });
+
+    // La passerelle CAS d'EcoleDirecte (/v3/cas/goToService.awp) s'ouvre en
+    // POST avec le jeton : elle doit rester « allow », un popup la rejouerait
+    // en GET et perdrait le jeton. Elle repond une page qui navigue ensuite,
+    // en GET, vers le service avec un ticket dans l'URL. C'est cette
+    // navigation qu'on reprend : le ticket n'est pas encore consomme, le
+    // popup habille l'ouvre a sa place et la fenetre nue disparait.
+    const handOver = (event, url) => {
+      if (decideWindowOpen(url) !== "popup") return;
+      event.preventDefault();
+      console.log(`Fenêtre nue reprise dans un popup — ${String(url).slice(0, 110)}`);
+      openPopup(url);
+      if (!win.isDestroyed()) win.close();
+    };
+    win.webContents.on("will-navigate", handOver);
+    win.webContents.on("will-redirect", handOver);
   });
 }
 
