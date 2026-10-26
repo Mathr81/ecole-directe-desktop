@@ -33,10 +33,10 @@ Cases à cocher pour suivre l'avancement. Ordre = priorité.
 
 ## Phase 2 — À vérifier sur l'API réelle
 
-- [ ] **5. Badge distant par connexion complète.** `readBadgeFromApi` refait un
-      login avec mot de passe toutes les 20–40 min. Tester si
-      `edApi.relogin()` (jeton, sans mot de passe, inutilisé aujourd'hui)
-      renvoie bien `accounts[].modules[].badge`. Si oui, basculer dessus.
+- [x] **5. Badge distant par connexion complète.** Testé
+      (`scripts/diag-relogin.js`) : pour un compte élève, `accessToken` est
+      vide et `relogin.awp` répond 505. On garde le login complet, qui ne
+      tue pas la session de la page (déjà vérifié).
 
 ## Phase 3 — Dette
 

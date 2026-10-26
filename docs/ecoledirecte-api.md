@@ -164,6 +164,15 @@ C'est ce qui autorise à rafraîchir le badge par un `login.awp` dédié sans
 casser la session de la page. Sans cette garantie, chaque rafraîchissement
 aurait déclenché la reprise sur session expirée, en boucle.
 
+### Le relogin par jeton n'est pas une alternative, du moins pour un élève
+
+Vérifié par `scripts/diag-relogin.js` le 26/10/2026 sur un compte élève
+(`typeCompte E`) : la réponse de login porte un `accounts[].accessToken`
+**vide**. `relogin.awp` (`isReLogin: true`, sans mot de passe) répond donc
+`505 « Identifiant et/ou mot de passe invalide »`, avec ou sans en-tête
+`X-Token`. Le badge garde le login complet. Peut-être différent pour un
+compte parent, non vérifié.
+
 ### Ce qu'on ne peut pas faire : se greffer sur les réponses du site
 
 `webRequest.onHeadersReceived` donne les en-têtes, jamais le corps. Le
