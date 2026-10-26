@@ -1,5 +1,6 @@
 const { app, nativeImage } = require("electron");
 const { getAssetPath } = require("../lib/paths");
+const { setTrayCount } = require("./tray");
 
 // Le badge ne se lit plus dans le DOM.
 //
@@ -67,6 +68,7 @@ function createBadgeState(initial = 0) {
 }
 
 function applyBadge(count, mainWindow) {
+  setTrayCount(count);
   if (process.platform === "darwin" || process.platform === "linux") {
     try { app.setBadgeCount(count); badgeLog("setBadgeCount(" + count + ")"); }
     catch (e) { badgeLog("setBadgeCount non supporte :", e.message); }

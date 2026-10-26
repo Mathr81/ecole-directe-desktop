@@ -21,6 +21,17 @@ function startedHidden(argv = process.argv) {
   return argv.includes(HIDDEN_ARG);
 }
 
+// La pastille de la barre des taches disparait avec la fenetre cachee :
+// l'infobulle de l'icone prend le relais.
+function trayTooltip(count) {
+  if (!Number.isInteger(count) || count <= 0) return "Mon ÉcoleDirecte";
+  return `Mon ÉcoleDirecte — ${count} message${count > 1 ? "s" : ""} non lu${count > 1 ? "s" : ""}`;
+}
+
+function setTrayCount(count) {
+  if (tray && !tray.isDestroyed()) tray.setToolTip(trayTooltip(count));
+}
+
 function showWindow(mainWindow) {
   if (mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -92,4 +103,4 @@ function setupTray(mainWindow) {
   return tray;
 }
 
-module.exports = { setupTray, showWindow, startedHidden };
+module.exports = { setupTray, showWindow, startedHidden, setTrayCount, trayTooltip };
