@@ -98,7 +98,7 @@
     ],
     "directories": {
       "output": "dist",
-      "buildResources": "assets"
+      "buildResources": "build"
     },
     "extraResources": [
       {
