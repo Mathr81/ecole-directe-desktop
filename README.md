@@ -16,8 +16,10 @@ entièrement par l'API ÉcoleDirecte, sans navigateur piloté.
 - **Écran de démarrage** — l'application indique ce qu'elle fait pendant l'authentification et le chargement du site, au lieu d'une fenêtre blanche
 - **Badge de notifications** — le nombre de notifications non lues s'affiche sur l'icône dans la barre des tâches Windows
 - **Liens externes dans une popup intégrée** — les liens ouverts depuis ÉcoleDirecte s'affichent dans une mini-fenêtre avec barre d'outils (copier l'URL, ouvrir dans le navigateur)
-- **Palette de navigation** — `Ctrl+K` pour aller à n'importe quelle page du site en tapant quelques lettres
+- **Palette de navigation** — `Ctrl+K` pour aller à n'importe quelle page du site en tapant quelques lettres, ou recharger, changer de compte, ouvrir le journal, vérifier les mises à jour
 - **Téléchargements intégrés** — les pièces jointes partent dans le dossier Téléchargements, avec l'avancement et des boutons pour ouvrir le fichier ou son dossier
+- **Arrière-plan et notifications** — fermer la fenêtre la garde ouverte dans la zone de notification ; une notification signale les nouveaux messages, notes et devoirs. Le menu de l'icône permet de quitter et de lancer l'app au démarrage
+- **Hors ligne** — sans réseau, l'écran d'attente le dit et l'application repart seule au retour de la connexion
 - **Raccourcis clavier** — `F5` / `Ctrl+R` pour recharger, `F12` pour les DevTools, `Alt+←/→` pour naviguer dans l'historique, `Ctrl+` / `Ctrl-` / `Ctrl+0` pour le zoom (mémorisé)
 - **Mises à jour automatiques** — l'application vérifie et télécharge les nouvelles versions en arrière-plan via GitHub Releases
 

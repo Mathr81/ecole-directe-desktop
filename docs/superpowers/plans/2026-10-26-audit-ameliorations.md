@@ -53,12 +53,13 @@ Cases à cocher pour suivre l'avancement. Ordre = priorité.
 
 ## Phase 4 — Fonctionnalités
 
-- [ ] Notifications natives (nouveau message / note / devoir) : comparer les
+- [x] Notifications natives (nouveau message / note / devoir) : comparer les
       compteurs de `moduleBadges` d'un rafraîchissement à l'autre.
-- [ ] Icône dans la zone de notification, réduction en arrière-plan.
-- [ ] Lancement au démarrage (`app.setLoginItemSettings`).
-- [ ] Actions dans la palette Ctrl+K : se déconnecter / changer de compte,
+- [x] Icône dans la zone de notification, réduction en arrière-plan.
+- [x] Lancement au démarrage (`app.setLoginItemSettings`), case du menu de
+      l'icône, active seulement dans l'application installée.
+- [x] Actions dans la palette Ctrl+K : se déconnecter / changer de compte,
       ouvrir `app.log`, vérifier les mises à jour, recharger.
-- [ ] Multi-comptes (parent avec plusieurs enfants) : le badge ne lit que le
-      compte courant.
-- [ ] Écran hors ligne explicite au lieu de la page d'erreur Chromium.
+- [ ] *Non fait.* Multi-comptes (parent avec plusieurs enfants) : le badge ne
+      lit que le compte courant. Impossible à tester sans compte parent.
+- [x] Écran hors ligne explicite au lieu de la page d'erreur Chromium.
