@@ -1,4 +1,4 @@
-const { app, ipcMain, Menu, Notification, safeStorage, session } = require("electron");
+const { app, dialog, ipcMain, Menu, Notification, safeStorage, session, shell } = require("electron");
 const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const path = require("path");
 
@@ -13,6 +13,7 @@ const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
 const { createTwoFaWindow } = require("./windows/twofa-window");
+const { setPaletteActions } = require("./windows/palette-window");
 const { createEdApi } = require("./auth/ed-api");
 const { createAuthFlow } = require("./auth/auth-flow");
 const { createReloginGuard } = require("./auth/relogin-guard");
@@ -434,6 +435,50 @@ async function readBadgeFromApi(deps, mainWindow) {
 }
 
 // =========================
+// ACTIONS DE LA PALETTE (Ctrl+K)
+// =========================
+
+// Repart de zero : identifiants, cles 2FA, et le stockage du site qui les
+// recopie (localStorage["fa"]). Le redemarrage rouvre la fenetre de connexion.
+async function switchAccount(mainWindow, deps) {
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    buttons: ["Changer de compte", "Annuler"],
+    defaultId: 1,
+    cancelId: 1,
+    title: "Changer de compte",
+    message: "Oublier les identifiants enregistrés et redémarrer ?",
+    detail: "La fenêtre de connexion s'ouvrira au redémarrage.",
+  });
+  if (response !== 0) return;
+
+  deps.credentialsStore.clearAccount();
+  await session.defaultSession.clearStorageData({
+    origin: "https://www.ecoledirecte.com",
+    storages: ["localstorage"],
+  });
+  console.log("Changement de compte : identifiants effacés, redémarrage.");
+  app.relaunch();
+  app.exit(0);
+}
+
+function paletteActions(mainWindow, deps, updater) {
+  const actions = [
+    { id: "reload", label: "Recharger la page", run: () => mainWindow.webContents.reload() },
+    { id: "switch-account", label: "Changer de compte", run: () => switchAccount(mainWindow, deps) },
+    {
+      id: "open-log",
+      label: "Ouvrir le journal (app.log)",
+      run: () => shell.openPath(path.join(userDataPath, "app.log")),
+    },
+  ];
+  if (updater) {
+    actions.push({ id: "check-update", label: "Vérifier les mises à jour", run: updater.checkNow });
+  }
+  return actions;
+}
+
+// =========================
 // MAIN
 // =========================
 
@@ -510,7 +555,8 @@ async function main() {
     refreshRemoteCount: () => readBadgeFromApi(deps, mainWindow),
     initialCount: state ? messagerieBadgeCount(state) : 0,
   });
-  setupAutoUpdater(mainWindow);
+  const updater = setupAutoUpdater(mainWindow);
+  setPaletteActions(paletteActions(mainWindow, deps, updater));
 
   // Les pieces jointes d'EcoleDirecte partent directement dans le dossier
   // Telechargements, sans boite de dialogue, avec l'avancement en bas a
@@ -535,6 +581,10 @@ if (!app.requestSingleInstanceLock()) {
     // La fenetre peut etre cachee dans la zone de notification.
     showWindow(mainWindowRef);
   });
+
+  // Meme identifiant que l'installeur (build.appId) : sous Windows, les
+  // notifications sont rattachees a l'application par cet identifiant.
+  if (process.platform === "win32") app.setAppUserModelId("desktop.ecole-directe.app");
 
   app.whenReady().then(() => {
     main().catch((err) => {

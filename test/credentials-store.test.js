@@ -138,3 +138,19 @@ test("sans chiffrement disponible, read ne leve pas", () => {
   assert.deepEqual(creds.faKeys, []);
   fs.unlinkSync(file);
 });
+
+test("clearAccount efface identifiants et cles 2FA, garde l'uuid d'appareil", () => {
+  const file = tmpFile();
+  const store = createCredentialsStore(file, fakeSafeStorage);
+  store.writeCredentials("u", "p");
+  store.saveFaKeys([{ cn: "a", cv: "b" }]);
+  const uuid = store.ensureDeviceUuid();
+
+  store.clearAccount();
+
+  const after = store.read();
+  assert.equal(after.username, null);
+  assert.equal(after.password, null);
+  assert.deepEqual(after.faKeys, []);
+  assert.equal(after.deviceUuid, uuid);
+});

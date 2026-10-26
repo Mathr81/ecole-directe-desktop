@@ -7,6 +7,15 @@ const HEIGHT = 380;
 
 let current = null;
 
+// Actions de l'application, proposees apres les destinations du site :
+// [{ id, label, run }]. Fournies par index.js, qui seul a le contexte.
+let actions = [];
+const ACTION_PREFIX = "action:";
+
+function setPaletteActions(list) {
+  actions = Array.isArray(list) ? list : [];
+}
+
 // Releve les destinations sur la page elle-meme. Aucune classe, aucun
 // selecteur specifique a EcoleDirecte : seulement <a href>, ce qui survit
 // aux refontes du site.
@@ -34,7 +43,10 @@ async function showPalette(mainWindow) {
     return current;
   }
 
-  const entries = await collectEntries(mainWindow);
+  const entries = [
+    ...(await collectEntries(mainWindow)),
+    ...actions.map((a) => ({ href: ACTION_PREFIX + a.id, label: a.label })),
+  ];
   if (entries.length === 0) {
     console.warn("Palette : aucune destination trouvée sur la page.");
     return null;
@@ -56,9 +68,18 @@ async function showPalette(mainWindow) {
 
   current = win;
 
-  const go = (_event, href) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(href);
+  const go = (event, href) => {
+    // Seules les entrees proposees sont acceptees : la page de la palette
+    // ne doit pas pouvoir faire charger n'importe quelle URL.
+    if (event.sender !== win.webContents || !entries.some((e) => e.href === href)) return;
     if (!win.isDestroyed()) win.close();
+
+    if (href.startsWith(ACTION_PREFIX)) {
+      const action = actions.find((a) => ACTION_PREFIX + a.id === href);
+      if (action) Promise.resolve().then(action.run).catch((err) => console.error("Action de palette :", err));
+      return;
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(href);
   };
   const close = () => { if (!win.isDestroyed()) win.close(); };
 
@@ -79,4 +100,4 @@ async function showPalette(mainWindow) {
   return win;
 }
 
-module.exports = { showPalette, collectEntries };
+module.exports = { showPalette, collectEntries, setPaletteActions };

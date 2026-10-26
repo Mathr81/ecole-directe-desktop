@@ -36,7 +36,7 @@ function clearRecord() {
 function setupAutoUpdater(mainWindow) {
   if (process.env.NODE_ENV === "development") {
     console.log("Auto-updater désactivé en mode développement.");
-    return;
+    return null;
   }
 
   const state = createUpdateState();
@@ -176,6 +176,10 @@ function setupAutoUpdater(mainWindow) {
   check();
   const timer = setInterval(check, CHECK_INTERVAL_MS);
   app.on("will-quit", () => clearInterval(timer));
+
+  // Verification demandee : contrairement a la cadence horaire, on montre
+  // le resultat, meme « a jour ».
+  return { checkNow: () => check().then(() => render({ open: true })) };
 }
 
 module.exports = { setupAutoUpdater };

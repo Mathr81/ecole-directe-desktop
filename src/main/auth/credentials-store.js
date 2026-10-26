@@ -81,7 +81,17 @@ function createCredentialsStore(filePath, safeStorage) {
     writeRaw(raw);
   }
 
-  return { read, writeCredentials, ensureDeviceUuid, saveFaKeys, clearFaKeys };
+  // Changement de compte : identifiants et cles 2FA partent, l'uuid
+  // d'appareil reste (c'est toujours le meme appareil).
+  function clearAccount() {
+    const raw = readRaw();
+    delete raw.username;
+    delete raw.password;
+    delete raw.faKeys;
+    writeRaw(raw);
+  }
+
+  return { read, writeCredentials, ensureDeviceUuid, saveFaKeys, clearFaKeys, clearAccount };
 }
 
 module.exports = { createCredentialsStore };
