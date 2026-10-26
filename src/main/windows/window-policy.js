@@ -49,9 +49,28 @@ function decideWindowOpen(url) {
   // Refuser ne peut rien perdre : cette fenetre ne rendait aucun fichier.
   if (url.startsWith("blob:") || url.startsWith("data:")) return "deny";
 
-  if (url.includes("api.ecoledirecte.com")) return "allow";
+  // Hote exact : un `includes` laissait passer « https://evil.com/?api.ecoledirecte.com ».
+  if (hostnameOf(url) === "api.ecoledirecte.com") return "allow";
 
   return "popup";
+}
+
+function hostnameOf(url) {
+  try { return new URL(url).hostname; } catch { return ""; }
+}
+
+/**
+ * Seuls http: et https: partent vers le navigateur du systeme. Les autres
+ * schemas (file:, ms-msdt:, search-ms:...) sont une voie connue d'execution
+ * de code sous Windows, et une page tierce peut s'y rediriger.
+ */
+function isSafeExternalUrl(url) {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -88,4 +107,4 @@ function isAutoCreated(win) {
   return Boolean(win) && autoCreated.has(win);
 }
 
-module.exports = { decideWindowOpen, applyWindowPolicy, isAutoCreated };
+module.exports = { decideWindowOpen, applyWindowPolicy, isAutoCreated, isSafeExternalUrl };

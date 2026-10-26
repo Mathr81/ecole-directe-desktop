@@ -1,9 +1,9 @@
-const { BrowserWindow, clipboard, ipcMain, screen } = require("electron");
+const { BrowserWindow, clipboard, ipcMain, screen, shell } = require("electron");
 const path = require("path");
 const { getAssetPath } = require("../lib/paths");
 const { registerWindowShortcuts } = require("../features/shortcuts");
 const { loadWindowState, saveWindowState } = require("../lib/window-state");
-const { applyWindowPolicy } = require("./window-policy");
+const { applyWindowPolicy, isSafeExternalUrl } = require("./window-policy");
 
 const MIN_WIDTH = 520;
 const MIN_HEIGHT = 360;
@@ -44,9 +44,10 @@ function createPopupWindow(url) {
     icon: getAssetPath("icons", "icon.ico"),
     frame: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      sandbox: true,
+      contextIsolation: true,
       webviewTag: true,
+      preload: path.join(__dirname, "..", "..", "preload", "popup.js"),
     },
   });
 
@@ -59,12 +60,30 @@ function createPopupWindow(url) {
   // La copie passe par le processus principal : Electron 44 a retire le
   // module clipboard des renderers (navigator.clipboard reste, mais depend
   // d'une activation utilisateur et d'une permission).
+  //
+  // Les ecouteurs sont globaux : sans le filtre sur l'expediteur, chaque
+  // popup ouverte repondait au clic de toutes les autres.
+  const fromThisPopup = (event) => !popup.isDestroyed() && event.sender === popup.webContents;
+
   const copyUrl = (event, url) => {
+    if (!fromThisPopup(event)) return;
     if (typeof url === "string" && url !== "") clipboard.writeText(url);
   };
+  const openExternal = (event, url) => {
+    if (!fromThisPopup(event)) return;
+    if (!isSafeExternalUrl(url)) {
+      console.warn("Ouverture externe refusée :", String(url).slice(0, 110));
+      return;
+    }
+    shell.openExternal(url).catch((err) => console.error("Ouverture externe impossible :", err.message));
+  };
   ipcMain.on("popup-copy-url", copyUrl);
+  ipcMain.on("popup-open-external", openExternal);
 
-  popup.on("closed", () => ipcMain.removeListener("popup-copy-url", copyUrl));
+  popup.on("closed", () => {
+    ipcMain.removeListener("popup-copy-url", copyUrl);
+    ipcMain.removeListener("popup-open-external", openExternal);
+  });
 
   registerWindowShortcuts(popup);
 

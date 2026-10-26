@@ -1,9 +1,10 @@
-const { BrowserWindow } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { getCustomExtensionPath } = require("../lib/paths");
 
-function loadCustomExtension(session) {
+// loadExtension renvoie une promesse : sans await, un echec passait en rejet
+// non gere et le journal annoncait « Extension chargée ! » quand meme.
+async function loadCustomExtension(session) {
   const extensionPath = getCustomExtensionPath();
   console.log("Chargement extension :", extensionPath);
 
@@ -19,11 +20,7 @@ function loadCustomExtension(session) {
   }
 
   try {
-    if (BrowserWindow.addExtension) {
-      BrowserWindow.addExtension(extensionPath);
-    } else {
-      session.extensions.loadExtension(extensionPath);
-    }
+    await session.extensions.loadExtension(extensionPath);
     console.log("Extension chargée !");
     return true;
   } catch (err) {

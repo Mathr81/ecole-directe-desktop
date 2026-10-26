@@ -186,7 +186,22 @@ test("les positions sont arrondies a l'entier", () => {
 // fenetre principale. Tout autre contexte — la <webview> d'un popup, par
 // exemple — retombait sur le defaut d'Electron : une fenetre nue.
 
-const { decideWindowOpen } = require("../src/main/windows/window-policy");
+const { decideWindowOpen, isSafeExternalUrl } = require("../src/main/windows/window-policy");
+
+test("l'API n'est autorisee que sur son hote exact", () => {
+  assert.equal(decideWindowOpen("https://evil.com/?api.ecoledirecte.com"), "popup");
+  assert.equal(decideWindowOpen("https://api.ecoledirecte.com.evil.com/x"), "popup");
+});
+
+test("seuls http et https partent vers le navigateur du systeme", () => {
+  assert.equal(isSafeExternalUrl("https://example.com"), true);
+  assert.equal(isSafeExternalUrl("http://example.com"), true);
+  assert.equal(isSafeExternalUrl("file:///C:/Windows/System32/calc.exe"), false);
+  assert.equal(isSafeExternalUrl("ms-msdt:/id PCWDiagnostic"), false);
+  assert.equal(isSafeExternalUrl("search-ms:query=x"), false);
+  assert.equal(isSafeExternalUrl(""), false);
+  assert.equal(isSafeExternalUrl(undefined), false);
+});
 
 test("un lien externe ouvre notre popup habille", () => {
   assert.equal(decideWindowOpen("https://example.com/page"), "popup");

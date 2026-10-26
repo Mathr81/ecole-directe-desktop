@@ -8,7 +8,9 @@ const { ipcRenderer } = require("electron");
 try {
   // L'ecran d'attente est une page file:// : on ne seme que sur l'origine
   // EcoleDirecte, sinon on ecrirait la session dans un storage sans rapport.
-  if (!location.hostname.endsWith("ecoledirecte.com")) {
+  // Hote EXACT : un endsWith acceptait « evil-ecoledirecte.com », et la
+  // session (jeton, cles 2FA) serait partie chez lui.
+  if (location.hostname !== "www.ecoledirecte.com") {
     throw new Error("origine hors EcoleDirecte, amorçage ignoré");
   }
 

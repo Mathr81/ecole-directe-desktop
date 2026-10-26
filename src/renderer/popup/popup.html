@@ -107,7 +107,6 @@
     <div id="toast" hidden>URL copiée</div>
 
     <script>
-      const { ipcRenderer, shell } = require("electron");
 
       const urlDisplay = document.getElementById("url-display");
       const wv = document.getElementById("wv");
@@ -140,14 +139,14 @@
       }
 
       function copyUrl() {
-        ipcRenderer.send("popup-copy-url", currentUrl);
+        window.popup.copyUrl(currentUrl);
         btnCopy.textContent = "Copié";
         clearTimeout(copyTimer);
         copyTimer = setTimeout(() => { btnCopy.textContent = "Copier"; }, 2000);
         showToast();
       }
 
-      ipcRenderer.on("load-url", (event, url) => {
+      window.popup.onLoadUrl((url) => {
         setUrl(url);
         wv.src = url;
       });
@@ -162,7 +161,7 @@
 
       btnCopy.addEventListener("click", copyUrl);
       document.getElementById("btn-open").addEventListener("click", () => {
-        shell.openExternal(currentUrl);
+        window.popup.openExternal(currentUrl);
       });
       document.getElementById("btn-close").addEventListener("click", () => {
         window.close();
