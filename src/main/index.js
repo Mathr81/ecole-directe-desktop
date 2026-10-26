@@ -8,6 +8,7 @@ const { loadCustomExtension } = require("./features/extensions");
 const { setupAutoUpdater } = require("./features/updater");
 const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/badge");
 const { setupDownloads } = require("./features/downloads");
+const { setupTray, showWindow } = require("./features/tray");
 const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
@@ -447,6 +448,7 @@ async function main() {
   extensions.addTab(mainWindow.webContents, mainWindow);
 
   Menu.setApplicationMenu(null);
+  setupTray(mainWindow);
 
   setupReloginOnRedirect(mainWindow, deps);
   setupExpiryRecovery(mainWindow, deps);
@@ -506,8 +508,8 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on("second-instance", () => {
     if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-    if (mainWindowRef.isMinimized()) mainWindowRef.restore();
-    mainWindowRef.focus();
+    // La fenetre peut etre cachee dans la zone de notification.
+    showWindow(mainWindowRef);
   });
 
   app.whenReady().then(() => {
