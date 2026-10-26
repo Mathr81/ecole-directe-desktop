@@ -1,4 +1,4 @@
-const { app, dialog, ipcMain, Menu, Notification, safeStorage, session, shell } = require("electron");
+const { app, dialog, ipcMain, Menu, net, Notification, safeStorage, session, shell } = require("electron");
 const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const path = require("path");
 
@@ -9,6 +9,7 @@ const { setupAutoUpdater } = require("./features/updater");
 const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/badge");
 const { setupDownloads } = require("./features/downloads");
 const { setupTray, showWindow } = require("./features/tray");
+const { setupOfflineRecovery, waitUntilOnline } = require("./features/offline");
 const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
@@ -526,6 +527,19 @@ async function main() {
   // parait figee. L'ecran sert aussi d'arriere-plan aux fenetres de
   // connexion et de double authentification.
   await mainWindow.loadFile(LOADING_PAGE);
+  setupOfflineRecovery(mainWindow, {
+    loadingPage: LOADING_PAGE,
+    showStatus: (text) => setLoadingStatus(mainWindow, text),
+  });
+
+  // Demarrage sans reseau (portable en veille, wifi coupe) : on attend son
+  // retour plutot que d'echouer l'authentification et d'afficher une page
+  // d'erreur.
+  if (!net.isOnline()) {
+    console.warn("Démarrage hors ligne, attente du réseau.");
+    setLoadingStatus(mainWindow, "Pas de connexion à Internet. Reprise automatique dès son retour…");
+    await waitUntilOnline();
+  }
   setLoadingStatus(mainWindow, "Authentification…");
 
   // L'authentification a lieu AVANT toute navigation vers le site : le
@@ -533,7 +547,11 @@ async function main() {
   const state = await ensureAuthenticated(mainWindow, deps);
 
   setLoadingStatus(mainWindow, "Chargement d'ÉcoleDirecte…");
-  await mainWindow.loadURL(state ? HOME_URL : LOGIN_URL);
+  // Un echec de chargement ne doit pas interrompre la suite (badge, mises a
+  // jour, telechargements) : la reprise hors ligne rechargera la page.
+  await mainWindow.loadURL(state ? HOME_URL : LOGIN_URL).catch((err) => {
+    console.warn("Chargement initial du site échoué :", err.message);
+  });
 
   // Si l'injection de session avait echoue, le SPA nous renverrait ici
   // vers /login : cette ligne est le temoin le plus direct.
