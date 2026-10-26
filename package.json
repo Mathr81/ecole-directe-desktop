@@ -1,7 +1,7 @@
 {
   "name": "ecole-directe-desktop",
   "productName": "Mon EcoleDirecte",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Une application desktop pour ÉcoleDirecte, avec authentification par API",
   "main": "src/main/index.js",
   "packageManager": "pnpm@12.8.1",
