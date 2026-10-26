@@ -83,3 +83,11 @@ test("la cadence distante reste discrete", () => {
 test("la lecture locale est plus fréquente que le rafraichissement distant", () => {
   assert.ok(LOCAL_INTERVAL_MS < REMOTE_BASE_MS - REMOTE_JITTER_MS);
 });
+
+test("une pastille par valeur jusqu'a 9, puis 9+", () => {
+  const { badgeFileName } = require("../src/main/features/badge");
+  assert.equal(badgeFileName(1), "1.png");
+  assert.equal(badgeFileName(9), "9.png");
+  assert.equal(badgeFileName(10), "9plus.png");
+  assert.equal(badgeFileName(250), "9plus.png");
+});

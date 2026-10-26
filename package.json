@@ -19,7 +19,6 @@
   "author": "Mathr81",
   "license": "MIT",
   "dependencies": {
-    "canvas": "^3.2.3",
     "electron-chrome-extensions": "^4.9.0",
     "electron-updater": "^6.8.9"
   },

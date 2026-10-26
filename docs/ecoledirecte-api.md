@@ -232,16 +232,17 @@ passage à Electron 44 elle était en 4.31.0, qui ne connaissait pas encore
 l'ABI 149, et l'installation échouait avec un `getAbi` en erreur — pnpm
 annulait alors la mise à jour de `package.json`.
 
-Le correctif est une surcharge dans `package.json` :
+Le correctif est une surcharge dans `pnpm-workspace.yaml` :
 
-```json
-"pnpm": { "overrides": { "node-abi": "^4.35.0" } }
+```yaml
+overrides:
+  node-abi: ^4.35.0
 ```
 
-À relever pour chaque montée majeure d'Electron. Elle est sans effet sur
-`canvas`, seul module natif du projet : il est compilé en N-API 7, donc
-stable d'une ABI à l'autre — c'est uniquement l'interrogation de `node-abi`
-qui échouait, pas la recompilation.
+À relever pour chaque montée majeure d'Electron. Le projet n'a plus de
+module natif depuis le retrait de `canvas` (les pastilles du badge sont des
+PNG pré-rendus dans `assets/badges/`) : c'est uniquement l'interrogation de
+`node-abi` qui échouait, il n'y a rien à recompiler.
 
 ## `ELECTRON_RUN_AS_NODE` traîne dans certains terminaux
 

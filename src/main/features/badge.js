@@ -1,4 +1,5 @@
 const { app, nativeImage } = require("electron");
+const { getAssetPath } = require("../lib/paths");
 
 // Le badge ne se lit plus dans le DOM.
 //
@@ -77,37 +78,15 @@ function applyBadge(count, mainWindow) {
   }
 }
 
+// Pastilles pre-rendues dans assets/badges/ : 1 a 9, puis « 9+ ». Elles
+// remplacent un dessin a la volee qui imposait canvas, une dependance
+// native a recompiler pour Electron, pour une image de 32 px.
+function badgeFileName(count) {
+  return count > 9 ? "9plus.png" : `${count}.png`;
+}
+
 function createBadgeImage(count) {
-  badgeLog("Creation image badge :", count);
-  const label = count > 99 ? "99+" : String(count);
-  try {
-    const { createCanvas } = require("canvas");
-    const size = 32;
-    const canvas = createCanvas(size, size);
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#e94560";
-    ctx.beginPath(); ctx.arc(size/2, size/2, size/2, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "white";
-    ctx.font = "bold " + (label.length > 1 ? 14 : 18) + "px sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(label, size/2, size/2);
-    const img = nativeImage.createFromBuffer(canvas.toBuffer("image/png"));
-    badgeLog("Canvas OK :", img.isEmpty() ? "VIDE" : "OK");
-    return img;
-  } catch (e) { badgeLog("Canvas indisponible :", e.message); }
-  badgeLog("Fallback bitmap");
-  const size = 16;
-  const buf = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const idx = (y*size+x)*4;
-      const dx = x - size/2 + 0.5, dy = y - size/2 + 0.5;
-      if (Math.sqrt(dx*dx+dy*dy) <= size/2) { buf[idx]=233; buf[idx+1]=69; buf[idx+2]=96; buf[idx+3]=255; }
-    }
-  }
-  const img = nativeImage.createFromBitmap(buf, { width: size, height: size });
-  badgeLog("Bitmap :", img.isEmpty() ? "VIDE" : "OK");
-  return img;
+  return nativeImage.createFromPath(getAssetPath("badges", badgeFileName(count)));
 }
 
 /**
@@ -169,6 +148,7 @@ module.exports = {
   stopBadgePolling,
   applyBadge,
   createBadgeState,
+  badgeFileName,
   nextRemoteDelay,
   LOCAL_INTERVAL_MS,
   REMOTE_BASE_MS,
