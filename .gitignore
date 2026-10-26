@@ -131,3 +131,5 @@ dist
 
 # electron userData
 userData/
+# Recherches locales sur d'autres extensions, hors projet.
+api-researchs/

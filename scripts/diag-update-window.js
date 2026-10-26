@@ -8,10 +8,16 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 
-// Electron avertit en developpement que la page n'a pas de CSP. Toutes les
-// fenetres maison du projet sont dans ce cas (script inline), et le message
-// precise lui-meme qu'il disparait une fois l'application empaquetee.
+// Avertissements de securite d'Electron en developpement : ils disparaissent
+// une fois l'application empaquetee.
 const isDevOnlyWarning = (message) => /Electron Security Warning/.test(message);
+
+// Memes reglages que les vraies fenetres : sandbox, isolation, pont ui.js.
+const UI_WEB_PREFERENCES = {
+  sandbox: true,
+  contextIsolation: true,
+  preload: path.join(__dirname, "..", "src", "preload", "ui.js"),
+};
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -26,7 +32,7 @@ app.whenReady().then(async () => {
   const errors = [];
   const win = new BrowserWindow({
     width: 420, height: 260, show: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: UI_WEB_PREFERENCES,
   });
   win.webContents.on("console-message", (event) => {
     if (event.level === "error" && !isDevOnlyWarning(event.message)) errors.push(event.message);
@@ -52,11 +58,11 @@ app.whenReady().then(async () => {
   check("le detail explique la situation", /échoué 2 fois/.test(painted.detail), painted.detail);
   check("aucune erreur console dans le renderer", errors.length === 0, errors.join(" | "));
 
-  // ---- Palette : le require du module partage passe-t-il ? ------------
+  // ---- Palette : le filtre partage se charge-t-il ? -------------------
   const perrors = [];
   const pal = new BrowserWindow({
     width: 520, height: 380, show: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: UI_WEB_PREFERENCES,
   });
   pal.webContents.on("console-message", (event) => {
     if (event.level === "error" && !isDevOnlyWarning(event.message)) perrors.push(event.message);
