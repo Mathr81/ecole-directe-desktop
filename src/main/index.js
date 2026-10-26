@@ -83,104 +83,24 @@ function setLoadingStatus(mainWindow, text) {
 }
 
 // =========================
-// BANDEAU D'AVERTISSEMENT
+// BANDEAUX D'AUTHENTIFICATION
 // =========================
 
 // Non bloquant : le formulaire EcoleDirecte reste utilisable en dessous.
-//
-// Reprend a l'identique le traitement d'erreur des fenetres maison
-// (.ed-error dans src/renderer/shared/base.css) : memes couleurs, meme
-// typographie. Les valeurs sont dupliquees ici parce que la feuille est
-// injectee dans une page distante que l'on ne controle pas.
-const AUTH_BANNER_STYLE = [
-  "position:fixed",
-  "top:0",
-  "left:0",
-  "right:0",
-  "z-index:99999",
-  "padding:8px 12px",
-  "color:#58151c",                      // --ed-danger-text
-  "background:#f8d7da",                 // --ed-danger-bg
-  "border-bottom:1px solid #f1aeb5",    // --ed-danger-border
-  "font-family:Tahoma,Helvetica,Arial,sans-serif", // --ed-font
-  "font-size:12px",                     // --ed-font-size-sm
-  "text-align:center",
-].join(";");
+const AUTH_BANNER_ID = "ed-auth-banner";
+// Information, pas une panne : sans lui, la page se rechargerait sans
+// explication au milieu de la session. Le rechargement l'emporte avec la
+// page ; on ne l'efface a la main que si la reprise echoue.
+const AUTH_NOTICE_ID = "ed-auth-notice";
 
 function showAuthBanner(mainWindow, code) {
-  if (mainWindow.isDestroyed()) return;
-
-  const message =
+  showNotice(
+    mainWindow,
+    AUTH_BANNER_ID,
     `Connexion automatique impossible (${code}). ` +
-    "Connectez-vous manuellement ci-dessous. Détails dans app.log.";
-
-  mainWindow.webContents.executeJavaScript(`
-    (() => {
-      let banner = document.getElementById('ed-auth-banner');
-      if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'ed-auth-banner';
-        banner.style.cssText = ${JSON.stringify(AUTH_BANNER_STYLE)};
-        document.body.appendChild(banner);
-      }
-      banner.textContent = ${JSON.stringify(message)};
-    })()
-  `).catch(() => {});
-}
-
-// Bandeau d'information, meme ossature que le bandeau d'erreur mais aux
-// couleurs de l'accent : ce n'est pas une panne, juste une attente. Sans
-// lui, la page se rechargerait sans explication au milieu de la session.
-const AUTH_NOTICE_STYLE = [
-  "position:fixed",
-  "top:0",
-  "left:0",
-  "right:0",
-  "z-index:99999",
-  "padding:8px 12px",
-  "color:#ffffff",                      // --ed-text-on-accent
-  "background:#0f8fd1",                 // --ed-accent
-  "font-family:Tahoma,Helvetica,Arial,sans-serif", // --ed-font
-  "font-size:12px",                     // --ed-font-size-sm
-  "text-align:center",
-].join(";");
-
-function showAuthNotice(mainWindow, message) {
-  if (mainWindow.isDestroyed()) return;
-  mainWindow.webContents.executeJavaScript(`
-    (() => {
-      let notice = document.getElementById('ed-auth-notice');
-      if (!notice) {
-        notice = document.createElement('div');
-        notice.id = 'ed-auth-notice';
-        notice.style.cssText = ${JSON.stringify(AUTH_NOTICE_STYLE)};
-        document.body.appendChild(notice);
-      }
-      notice.textContent = ${JSON.stringify(message)};
-    })()
-  `).catch(() => {});
-}
-
-function clearAuthBanner(mainWindow) {
-  if (mainWindow.isDestroyed()) return;
-  mainWindow.webContents.executeJavaScript(`
-    (() => {
-      const banner = document.getElementById('ed-auth-banner');
-      if (banner) banner.remove();
-    })()
-  `).catch(() => {});
-}
-
-// Le rechargement emporte le bandeau avec la page ; cette fonction ne sert
-// donc qu'au cas ou la reprise echoue et ou l'on reste sur place.
-function clearAuthNotice(mainWindow) {
-  if (mainWindow.isDestroyed()) return;
-  mainWindow.webContents.executeJavaScript(`
-    (() => {
-      const notice = document.getElementById('ed-auth-notice');
-      if (notice) notice.remove();
-    })()
-  `).catch(() => {});
+      "Connectez-vous manuellement ci-dessous. Détails dans app.log.",
+    { tone: "error" }
+  );
 }
 
 // =========================
@@ -306,7 +226,7 @@ function setupReloginOnRedirect(mainWindow, deps) {
 
       const state = await ensureAuthenticated(mainWindow, deps);
       if (state) {
-        clearAuthBanner(mainWindow);
+        clearNotice(mainWindow, AUTH_BANNER_ID);
         await mainWindow.loadURL(HOME_URL);
         applyBadge(messagerieBadgeCount(state), mainWindow);
       } else {
@@ -380,12 +300,12 @@ function setupExpiryRecovery(mainWindow, deps) {
       const target = current.startsWith(ED_ORIGIN) ? current : HOME_URL;
 
       console.log("Session expirée détectée, réauthentification par API.");
-      showAuthNotice(mainWindow, "Session expirée, reconnexion…");
+      showNotice(mainWindow, AUTH_NOTICE_ID, "Session expirée, reconnexion…");
       deps.reloginGuard.recordAttempt();
 
       const state = await ensureAuthenticated(mainWindow, deps);
       if (!state) {
-        clearAuthNotice(mainWindow);
+        clearNotice(mainWindow, AUTH_NOTICE_ID);
         showAuthBanner(mainWindow, "SESSION_EXPIREE");
         return;
       }
@@ -393,12 +313,12 @@ function setupExpiryRecovery(mainWindow, deps) {
       await writeSessionIntoPage(mainWindow, state, deps.credentialsStore.read().faKeys);
       await mainWindow.loadURL(target);
 
-      clearAuthBanner(mainWindow);
+      clearNotice(mainWindow, AUTH_BANNER_ID);
       applyBadge(messagerieBadgeCount(state), mainWindow);
       console.log("Session rétablie sans intervention.");
     } catch (err) {
       console.error("Reprise sur session expirée impossible :", err.message);
-      clearAuthNotice(mainWindow);
+      clearNotice(mainWindow, AUTH_NOTICE_ID);
       showAuthBanner(mainWindow, "SESSION_EXPIREE");
     } finally {
       inProgress = false;
