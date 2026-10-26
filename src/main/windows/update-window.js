@@ -34,10 +34,7 @@ async function showUpdateWindow(parent) {
     show: false,
     parent: parent && !parent.isDestroyed() ? parent : undefined,
     title: "Mise à jour",
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, "..", "..", "preload", "ui.js") },
   });
 
   win.setMenuBarVisibility(false);

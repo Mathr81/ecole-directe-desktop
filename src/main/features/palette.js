@@ -92,4 +92,5 @@ function filterEntries(entries, query, limit = DEFAULT_LIMIT) {
     .map((row) => row.entry);
 }
 
-module.exports = { normalizeLinks, filterEntries, scoreEntry, fold, MAX_LABEL, DEFAULT_LIMIT };
+// Aussi charge tel quel dans la fenetre palette, ou `module` n'existe pas.
+if (typeof module !== "undefined") module.exports = { normalizeLinks, filterEntries, scoreEntry, fold, MAX_LABEL, DEFAULT_LIMIT };

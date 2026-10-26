@@ -20,10 +20,7 @@ async function createTwoFaWindow(parent, { question, propositions }) {
     modal: Boolean(parent),
     parent: parent || undefined,
     title: "Double authentification",
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, "..", "..", "preload", "ui.js") },
   });
 
   await twoFaWindow.loadFile(

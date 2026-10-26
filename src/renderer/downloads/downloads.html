@@ -170,14 +170,14 @@
     <p class="dl__empty" id="empty" hidden>Aucun téléchargement.</p>
 
     <script>
-      const { ipcRenderer } = require("electron");
+      const ipc = window.ed;
 
       const list = document.getElementById("list");
       const empty = document.getElementById("empty");
 
       // Les vues arrivent deja calculees par le processus principal
       // (describeDownload) : ce renderer ne decide de rien, il peint.
-      ipcRenderer.on("downloads:state", (_event, views) => {
+      ipc.on("downloads:state", (views) => {
         list.textContent = "";
 
         for (const view of views) {
@@ -231,25 +231,25 @@
         empty.hidden = views.length > 0;
         // Le processus principal ne peut pas connaitre la hauteur du
         // contenu : c'est le renderer qui signale qu'il a fini de peindre.
-        ipcRenderer.send("downloads:rendered");
+        ipc.send("downloads:rendered");
       });
 
       function action(label, channel, id) {
         const button = document.createElement("button");
         button.className = "dl__act";
         button.textContent = label;
-        button.addEventListener("click", () => ipcRenderer.send(channel, id));
+        button.addEventListener("click", () => ipc.send(channel, id));
         return button;
       }
 
       document.getElementById("close")
-        .addEventListener("click", () => ipcRenderer.send("downloads:dismiss"));
+        .addEventListener("click", () => ipc.send("downloads:dismiss"));
 
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") ipcRenderer.send("downloads:dismiss");
+        if (e.key === "Escape") ipc.send("downloads:dismiss");
       });
 
-      ipcRenderer.send("downloads:ready");
+      ipc.send("downloads:ready");
     </script>
   </body>
 </html>

@@ -61,7 +61,7 @@
     </div>
 
     <script>
-      const { ipcRenderer } = require("electron");
+      const ipc = window.ed;
 
       const el = {
         title: document.getElementById("title"),
@@ -76,7 +76,7 @@
 
       // Le processus principal envoie la vue deja calculee (update-state.js) :
       // ce renderer ne decide de rien, il peint.
-      ipcRenderer.on("update:view", (_event, view, percent) => {
+      ipc.on("update:view", (view, percent) => {
         el.title.textContent = view.title;
 
         // Une erreur passe dans le bloc .ed-error, comme dans les fenetres
@@ -97,17 +97,17 @@
         el.install.disabled = true;
         el.later.disabled = true;
         el.title.textContent = "Installation…";
-        ipcRenderer.send("update:install");
+        ipc.send("update:install");
       });
 
-      el.manual.addEventListener("click", () => ipcRenderer.send("update:open-installer"));
-      el.later.addEventListener("click", () => ipcRenderer.send("update:dismiss"));
+      el.manual.addEventListener("click", () => ipc.send("update:open-installer"));
+      el.later.addEventListener("click", () => ipc.send("update:dismiss"));
 
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") ipcRenderer.send("update:dismiss");
+        if (e.key === "Escape") ipc.send("update:dismiss");
       });
 
-      ipcRenderer.send("update:ready");
+      ipc.send("update:ready");
     </script>
   </body>
 </html>

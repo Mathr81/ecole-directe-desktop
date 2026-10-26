@@ -37,13 +37,13 @@
     </div>
 
     <script>
-      const { ipcRenderer } = require("electron");
+      const ipc = window.ed;
 
       const questionEl = document.getElementById("question");
       const container = document.getElementById("propositions");
       const errorBox = document.getElementById("error");
 
-      ipcRenderer.on("twofa-question", (event, { question, propositions }) => {
+      ipc.on("twofa-question", ({ question, propositions }) => {
         questionEl.textContent = question;
         container.replaceChildren();
 
@@ -63,7 +63,7 @@
             container
               .querySelectorAll("button")
               .forEach((b) => (b.disabled = true));
-            ipcRenderer.send("twofa-answer", proposition);
+            ipc.send("twofa-answer", proposition);
           });
           container.appendChild(button);
         });

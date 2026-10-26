@@ -51,7 +51,7 @@ async function showPalette(mainWindow) {
     // fenetre qu'elle sert et disparait des qu'on la quitte.
     parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
     modal: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, "..", "..", "preload", "ui.js") },
   });
 
   current = win;

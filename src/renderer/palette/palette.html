@@ -80,11 +80,12 @@
     <ul class="ed-palette__list" id="list"></ul>
     <p class="ed-palette__empty" id="empty" hidden>Aucune destination ne correspond.</p>
 
+    <!-- Meme fonction de filtrage que le processus principal, avec ses
+         tests : la palette ne reimplemente pas sa propre recherche. Chargee
+         en script classique, ses fonctions deviennent globales. -->
+    <script src="../../main/features/palette.js"></script>
     <script>
-      const { ipcRenderer } = require("electron");
-      // Meme fonction de filtrage que le processus principal, avec ses
-      // tests : la palette ne reimplemente pas sa propre recherche.
-      const { filterEntries } = require("../../main/features/palette");
+      const ipc = window.ed;
 
       const input = document.getElementById("query");
       const list = document.getElementById("list");
@@ -124,10 +125,10 @@
 
       function go(index) {
         const entry = shown[index];
-        if (entry) ipcRenderer.send("palette:go", entry.href);
+        if (entry) ipc.send("palette:go", entry.href);
       }
 
-      ipcRenderer.on("palette:entries", (_event, received) => {
+      ipc.on("palette:entries", (received) => {
         entries = received || [];
         render();
         input.focus();
@@ -136,7 +137,7 @@
       input.addEventListener("input", render);
 
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") return ipcRenderer.send("palette:close");
+        if (e.key === "Escape") return ipc.send("palette:close");
         if (e.key === "ArrowDown") { e.preventDefault(); return select(cursor + 1); }
         if (e.key === "ArrowUp") { e.preventDefault(); return select(cursor - 1); }
         if (e.key === "Enter") { e.preventDefault(); return go(cursor); }

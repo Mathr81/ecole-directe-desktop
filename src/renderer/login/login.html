@@ -42,7 +42,7 @@
     </form>
 
     <script>
-      const { ipcRenderer } = require("electron");
+      const ipc = window.ed;
 
       const form = document.getElementById("login-form");
       const username = document.getElementById("username");
@@ -63,7 +63,7 @@
 
       // Envoye par le processus principal quand les identifiants enregistres
       // ont ete refuses.
-      ipcRenderer.on("login-error", (event, message) => showError(message));
+      ipc.on("login-error", (message) => showError(message));
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -80,7 +80,7 @@
           return;
         }
 
-        ipcRenderer.send("submit-credentials", { username: u, password: p });
+        ipc.send("submit-credentials", { username: u, password: p });
       });
 
       [username, password].forEach((field) =>

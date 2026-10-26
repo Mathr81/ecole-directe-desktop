@@ -59,7 +59,7 @@ async function showDownloads(parent) {
     // Enfant de la fenetre principale : il reste au-dessus d'elle et
     // disparait avec elle, sans encombrer la barre des taches.
     parent: parent && !parent.isDestroyed() ? parent : undefined,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, "..", "..", "preload", "ui.js") },
   });
 
   current = win;

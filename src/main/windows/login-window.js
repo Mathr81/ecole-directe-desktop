@@ -23,10 +23,7 @@ async function createLoginWindow(parent) {
     modal: Boolean(parent),
     parent: parent || undefined,
     title: "Connexion",
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, "..", "..", "preload", "ui.js") },
   });
 
   await loginWindow.loadFile(
