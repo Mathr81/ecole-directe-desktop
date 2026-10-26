@@ -23,11 +23,6 @@
     "electron-chrome-extensions": "^4.9.0",
     "electron-updater": "^6.8.9"
   },
-  "pnpm": {
-    "overrides": {
-      "node-abi": "^4.35.0"
-    }
-  },
   "devDependencies": {
     "@types/node": "^26.4.1",
     "cross-env": "^10.1.0",
