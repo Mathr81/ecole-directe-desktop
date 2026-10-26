@@ -173,6 +173,27 @@ Vérifié par `scripts/diag-relogin.js` le 26/10/2026 sur un compte élève
 `X-Token`. Le badge garde le login complet. Peut-être différent pour un
 compte parent, non vérifié.
 
+### Le jeton de la page suffit pour le compteur de la messagerie
+
+Vérifié par `scripts/diag-page-token.js` le 26/10/2026 : avec le seul jeton
+d'une session existante (`X-Token`), la liste des messages
+
+```
+POST /v3/eleves/{id}/messages.awp?typeRecuperation=received&itemsPerPage=1&verbe=get
+data={"anneeMessages":""}
+```
+
+répond 200 et porte `data.pagination.messagesRecusNotReadCount`, à côté de
+`messagesRecusCount`, `messagesEnvoyesCount`, `messagesArchivesCount` et
+`messagesDraftCount`. L'en-tête `x-token` renvoie **le même** jeton : pas de
+rotation, et le jeton répond toujours 200 après coup. Lire la liste ne marque
+rien comme lu.
+
+Le compteur de la messagerie peut donc se rafraîchir sans login ni mot de
+passe. Les autres modules (notes, devoirs, vie scolaire) n'ont pas
+d'équivalent identifié : leurs compteurs ne sont connus que par la réponse
+de login.
+
 ### Ce qu'on ne peut pas faire : se greffer sur les réponses du site
 
 `webRequest.onHeadersReceived` donne les en-têtes, jamais le corps. Le
