@@ -10,14 +10,9 @@ const path = require("path");
 const SRC = path.join(__dirname, "..", "CustomDirecte", "src");
 const DEST = path.join(__dirname, "..", ".cache", "extension");
 
-const PATCHES = {
-  "scripts/background.js": [["browser.storage.sync", "browser.storage.local"]],
-  "scripts/main.js": [
-    ["browser.storage.sync", "browser.storage.local"],
-    ["chrome.storage.sync", "chrome.storage.local"],
-  ],
-  "pages/popup/interface.js": [["browser.storage.sync", "browser.storage.local"]],
-};
+// storage.sync n'existe pas sous Electron : on le remplace partout, ou que
+// l'extension le range (la V3 l'a deplace dans browser.js, popupManager.js...).
+const PATCHES = [["storage.sync", "storage.local"]];
 
 if (!fs.existsSync(SRC)) {
   console.error(`[patch] Submodule absent : ${SRC}`);
@@ -30,18 +25,16 @@ fs.mkdirSync(DEST, { recursive: true });
 fs.cpSync(SRC, DEST, { recursive: true });
 console.log(`[patch] Copie ${SRC} -> ${DEST}`);
 
-for (const [relPath, patches] of Object.entries(PATCHES)) {
+const jsFiles = fs
+  .readdirSync(DEST, { recursive: true })
+  .filter((f) => f.endsWith(".js"));
+
+for (const relPath of jsFiles) {
   const file = path.join(DEST, relPath);
-
-  if (!fs.existsSync(file)) {
-    console.warn(`[patch] Absent, ignore : ${relPath}`);
-    continue;
-  }
-
   let content = fs.readFileSync(file, "utf8");
   let total = 0;
 
-  for (const [from, to] of patches) {
+  for (const [from, to] of PATCHES) {
     const count = content.split(from).length - 1;
     if (count > 0) {
       content = content.replaceAll(from, to);
@@ -52,8 +45,6 @@ for (const [relPath, patches] of Object.entries(PATCHES)) {
   if (total > 0) {
     fs.writeFileSync(file, content, "utf8");
     console.log(`[patch] ${relPath} : ${total} remplacement(s)`);
-  } else {
-    console.log(`[patch] ${relPath} : rien a patcher`);
   }
 }
 
