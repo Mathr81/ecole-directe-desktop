@@ -8,7 +8,7 @@ const { loadCustomExtension } = require("./features/extensions");
 const { setupAutoUpdater } = require("./features/updater");
 const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/badge");
 const { setupDownloads } = require("./features/downloads");
-const { setupTray, showWindow } = require("./features/tray");
+const { setupTray, showWindow, startedHidden } = require("./features/tray");
 const { setupOfflineRecovery, waitUntilOnline } = require("./features/offline");
 const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
@@ -518,6 +518,7 @@ async function main() {
 
   Menu.setApplicationMenu(null);
   setupTray(mainWindow);
+  if (startedHidden()) mainWindow.hide();
 
   setupReloginOnRedirect(mainWindow, deps);
   setupExpiryRecovery(mainWindow, deps);

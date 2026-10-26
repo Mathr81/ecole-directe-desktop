@@ -15,3 +15,10 @@ test("une valeur du mauvais type est ignoree, pas devinee", () => {
 test("les cles inconnues sont abandonnees", () => {
   assert.equal("intrus" in normalizeSettings({ intrus: 1 }), false);
 });
+
+const { startedHidden } = require("../src/main/features/tray");
+
+test("le demarrage reduit ne se declenche que sur --hidden", () => {
+  assert.equal(startedHidden(["app.exe", "--hidden"]), true);
+  assert.equal(startedHidden(["app.exe"]), false);
+});

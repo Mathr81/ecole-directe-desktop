@@ -10,6 +10,17 @@ const { loadSettings, saveSettings } = require("../lib/settings");
 let tray = null;
 let quitting = false;
 
+// Argument pose sur l'entree de demarrage : lancee avec l'ordinateur,
+// l'application part directement dans la zone de notification. Sous
+// Windows, getLoginItemSettings doit recevoir les memes arguments que
+// setLoginItemSettings pour lire la bonne entree.
+const HIDDEN_ARG = "--hidden";
+const LOGIN_ITEM = { args: [HIDDEN_ARG] };
+
+function startedHidden(argv = process.argv) {
+  return argv.includes(HIDDEN_ARG);
+}
+
 function showWindow(mainWindow) {
   if (mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -36,10 +47,10 @@ function buildMenu(mainWindow) {
     {
       label: "Lancer au démarrage de l'ordinateur",
       type: "checkbox",
-      checked: app.getLoginItemSettings().openAtLogin,
+      checked: app.getLoginItemSettings(LOGIN_ITEM).openAtLogin,
       // En developpement, on inscrirait electron.exe au demarrage.
       enabled: app.isPackaged,
-      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+      click: (item) => app.setLoginItemSettings({ ...LOGIN_ITEM, openAtLogin: item.checked }),
     },
     { type: "separator" },
     { label: "Quitter", click: () => app.quit() },
@@ -81,4 +92,4 @@ function setupTray(mainWindow) {
   return tray;
 }
 
-module.exports = { setupTray, showWindow };
+module.exports = { setupTray, showWindow, startedHidden };
