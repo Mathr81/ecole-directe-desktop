@@ -39,9 +39,18 @@ function showWindow(mainWindow) {
   mainWindow.focus();
 }
 
+// L'icone source fait 512 px ; la zone de notification affiche du 16 px,
+// 32 px sur un ecran a 200 %. Les deux tailles sont fournies, reduites avec
+// le meilleur filtre : sans cela Windows reduit lui-meme, et mal.
 function trayIcon() {
-  if (process.platform === "win32") return nativeImage.createFromPath(getAssetPath("icons", "icon.ico"));
-  return nativeImage.createFromPath(getAssetPath("icons", "icon.png")).resize({ width: 16, height: 16 });
+  const source = nativeImage.createFromPath(getAssetPath("icons", "icon.png"));
+  if (source.isEmpty()) console.warn("Icône de la zone de notification introuvable.");
+  const icon = source.resize({ width: 16, height: 16, quality: "best" });
+  icon.addRepresentation({
+    scaleFactor: 2,
+    buffer: source.resize({ width: 32, height: 32, quality: "best" }).toPNG(),
+  });
+  return icon;
 }
 
 function buildMenu(mainWindow) {
@@ -91,7 +100,7 @@ function setupTray(mainWindow) {
     if (!settings.backgroundHintShown && Notification.isSupported()) {
       new Notification({
         title: "Mon ÉcoleDirecte reste ouvert",
-        body: "L'application continue en arrière-plan. Clic droit sur son icône près de l'horloge pour la quitter.",
+        body: "Elle continue en arrière-plan pour le badge et les notifications. Pour la quitter : Ctrl+Q, ou clic droit sur son icône près de l'horloge.",
       }).show();
       saveSettings({ backgroundHintShown: true });
     }

@@ -5,6 +5,7 @@ const { showNotice, clearNotice } = require("./page-notice");
 const { showWindow } = require("./tray");
 const { filterEntries } = require("./palette");
 const { collectEntries } = require("../windows/palette-window");
+const { awake } = require("./sleep");
 const {
   messagerieBadgeCount,
   pageSessionFromStorage,
@@ -24,14 +25,21 @@ const MODULES_NOTICE_ID = "ed-modules-notice";
 // pas renouvele par l'appel (scripts/diag-page-token.js). Sans session
 // lisible dans la page — ecran de connexion, session expiree — on rend
 // null et la valeur en place est conservee.
+//
+// La derniere session lue est gardee : en veille (sleep.js) la page est
+// dechargee, et c'est elle qui sert alors.
+let lastPageSession = null;
+
 async function readBadgeFromPage(mainWindow, edApi) {
   if (mainWindow.isDestroyed()) return null;
-  if (!mainWindow.webContents.getURL().startsWith(ED_ORIGIN)) return null;
 
-  const [rawCredentials, rawAccounts] = await mainWindow.webContents.executeJavaScript(
-    '[sessionStorage.getItem("credentials"), sessionStorage.getItem("accounts")]'
-  );
-  const pageSession = pageSessionFromStorage(rawCredentials, rawAccounts);
+  if (mainWindow.webContents.getURL().startsWith(ED_ORIGIN)) {
+    const [rawCredentials, rawAccounts] = await mainWindow.webContents.executeJavaScript(
+      '[sessionStorage.getItem("credentials"), sessionStorage.getItem("accounts")]'
+    );
+    lastPageSession = pageSessionFromStorage(rawCredentials, rawAccounts);
+  }
+  const pageSession = lastPageSession;
   if (!pageSession) return null;
 
   const count = await edApi.unreadMessagesCount(pageSession);
@@ -78,11 +86,23 @@ function notifyArrivals(mainWindow, partial) {
 // Ramene la fenetre et, si le menu du site a un lien de ce nom, l'ouvre.
 // Le lien est cherche dans la page, comme pour la palette : aucune route
 // d'EcoleDirecte n'est codee en dur.
+//
+// Au sortir de la veille, le menu n'existe qu'une fois le SPA rendu : on
+// laisse quelques secondes a la page pour l'afficher.
 async function openArrival(mainWindow, menu) {
   showWindow(mainWindow);
   if (!menu) return;
-  const [target] = filterEntries(await collectEntries(mainWindow), menu, 1);
-  if (target && !mainWindow.isDestroyed()) mainWindow.loadURL(target.href);
+  await awake();
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (mainWindow.isDestroyed()) return;
+    const [target] = filterEntries(await collectEntries(mainWindow), menu, 1);
+    if (target) {
+      mainWindow.loadURL(target.href);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 }
 
 // Source espacee : une connexion complete, seule a connaitre les compteurs

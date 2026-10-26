@@ -11,6 +11,8 @@
 // raccourcis d'application. before-input-event est attache a un webContents
 // et ne se declenche que sur une frappe qui lui est destinee.
 
+const { app } = require("electron");
+
 // Paliers de zoom de Chrome. On travaille par paliers plutot qu'en
 // multipliant un facteur : c'est ce que fait le navigateur, et ça evite de
 // deriver vers des valeurs comme 1.0000000002 au fil des appuis.
@@ -67,6 +69,11 @@ function resolveShortcut(input, platform) {
     case "k":
     case "K":
       return cmd ? "palette" : null;
+    case "q":
+    case "Q":
+      // Quitter pour de bon, meme quand fermer la fenetre ne fait que la
+      // cacher dans la zone de notification.
+      return cmd ? "quit" : null;
     default:
       break;
   }
@@ -123,6 +130,9 @@ function runShortcut(action, contents) {
       return;
     case "zoom-reset":
       contents.setZoomFactor(1);
+      return;
+    case "quit":
+      app.quit();
       return;
   }
 }

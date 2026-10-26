@@ -1,6 +1,7 @@
 // Actions de l'application proposees dans la palette Ctrl+K, apres les
 // destinations du site.
 const { app, dialog, session, shell } = require("electron");
+const { loadSettings, saveSettings } = require("../lib/settings");
 
 // Repart de zero : identifiants, cles 2FA, et le stockage du site qui les
 // recopie (localStorage["fa"]). Le redemarrage rouvre la fenetre de connexion.
@@ -36,6 +37,20 @@ function paletteActions(mainWindow, deps, { updater, logFile }) {
       run: () => shell.openPath(logFile),
     },
   ];
+  actions.push(
+    {
+      id: "toggle-background",
+      // Libelle relu a chaque ouverture de la palette : il dit ce que fera
+      // l'action, d'apres le reglage du moment.
+      get label() {
+        return loadSettings().runInBackground
+          ? "Ne plus garder l'application ouverte en arrière-plan"
+          : "Garder l'application ouverte en arrière-plan";
+      },
+      run: () => saveSettings({ runInBackground: !loadSettings().runInBackground }),
+    },
+    { id: "quit", label: "Quitter complètement (Ctrl+Q)", run: () => app.quit() }
+  );
   if (updater) {
     actions.push({ id: "check-update", label: "Vérifier les mises à jour", run: updater.checkNow });
   }

@@ -10,6 +10,7 @@ const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/
 const { setupDownloads } = require("./features/downloads");
 const { setupTray, showWindow, startedHidden } = require("./features/tray");
 const { setupOfflineRecovery, waitBeforeRetry } = require("./features/offline");
+const { setupSleep } = require("./features/sleep");
 const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
@@ -404,6 +405,10 @@ async function main() {
 
   Menu.setApplicationMenu(null);
   setupTray(mainWindow);
+  setupSleep(mainWindow, {
+    loadingPage: LOADING_PAGE,
+    showStatus: (text) => setLoadingStatus(mainWindow, text),
+  });
   if (startedHidden()) mainWindow.hide();
 
   setupReloginOnRedirect(mainWindow, deps);

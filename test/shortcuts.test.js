@@ -166,3 +166,9 @@ test("Ctrl+K ouvre la palette", () => {
 test("K seul ne fait rien", () => {
   assert.equal(resolveShortcut({ type: "keyDown", key: "k" }, "win32"), null);
 });
+
+test("Ctrl+Q quitte, Cmd+Q sur macOS", () => {
+  assert.equal(resolveShortcut({ type: "keyDown", key: "q", control: true }, "win32"), "quit");
+  assert.equal(resolveShortcut({ type: "keyDown", key: "q", meta: true }, "darwin"), "quit");
+  assert.equal(resolveShortcut({ type: "keyDown", key: "q" }, "win32"), null);
+});
