@@ -7,7 +7,7 @@ const { filterEntries } = require("./palette");
 const { collectEntries } = require("../windows/palette-window");
 const {
   messagerieBadgeCount,
-  messagerieBadgeFromStoredAccounts,
+  pageSessionFromStorage,
   moduleBadges,
   describeModuleBadges,
   badgeCounts,
@@ -19,16 +19,24 @@ const ED_ORIGIN = "https://www.ecoledirecte.com/";
 // Pastille des compteurs hors messagerie, en bas a gauche.
 const MODULES_NOTICE_ID = "ed-modules-notice";
 
-// Source gratuite : le store du SPA, deja dans la page. Il ne bouge que
-// quand le site se reconnecte de lui-meme, mais ca ne coute rien de le lire.
-async function readBadgeFromPage(mainWindow) {
+// Source frequente : la messagerie interrogee avec le jeton de la session
+// deja ouverte dans la page. Ni login ni mot de passe, et le jeton n'est
+// pas renouvele par l'appel (scripts/diag-page-token.js). Sans session
+// lisible dans la page — ecran de connexion, session expiree — on rend
+// null et la valeur en place est conservee.
+async function readBadgeFromPage(mainWindow, edApi) {
   if (mainWindow.isDestroyed()) return null;
   if (!mainWindow.webContents.getURL().startsWith(ED_ORIGIN)) return null;
 
-  const raw = await mainWindow.webContents.executeJavaScript(
-    'sessionStorage.getItem("accounts")'
+  const [rawCredentials, rawAccounts] = await mainWindow.webContents.executeJavaScript(
+    '[sessionStorage.getItem("credentials"), sessionStorage.getItem("accounts")]'
   );
-  return messagerieBadgeFromStoredAccounts(raw);
+  const pageSession = pageSessionFromStorage(rawCredentials, rawAccounts);
+  if (!pageSession) return null;
+
+  const count = await edApi.unreadMessagesCount(pageSession);
+  if (count !== null) notifyArrivals(mainWindow, { MESSAGERIE: count });
+  return count;
 }
 
 /**
@@ -51,10 +59,11 @@ function showModuleBadges(mainWindow, state) {
 // le premier releve sert de reference, il ne notifie rien.
 let lastCounts = null;
 
-// Le rafraichissement distant est la seule source capable de voir arriver
-// du nouveau : c'est donc lui, et lui seul, qui notifie.
-function notifyArrivals(mainWindow, state) {
-  const counts = badgeCounts(state);
+// Notifie ce qui a augmente depuis le releve precedent. `partial` peut ne
+// porter que certains modules (la messagerie seule, pour la source
+// frequente) : les autres gardent leur derniere valeur connue.
+function notifyArrivals(mainWindow, partial) {
+  const counts = { ...lastCounts, ...partial };
   const summary = lastCounts ? describeArrivals(lastCounts, counts) : "";
   const menu = lastCounts ? arrivalMenu(lastCounts, counts) : null;
   lastCounts = counts;
@@ -76,8 +85,8 @@ async function openArrival(mainWindow, menu) {
   if (target && !mainWindow.isDestroyed()) mainWindow.loadURL(target.href);
 }
 
-// Source payante : une connexion dediee, seule capable de faire apparaitre
-// un nouveau message.
+// Source espacee : une connexion complete, seule a connaitre les compteurs
+// des notes, des devoirs et de la vie scolaire.
 //
 // Volontairement en dehors d'authFlow : sur un code 250, celui-ci effacerait
 // les cles fa et demanderait la question de double authentification. Un
@@ -101,7 +110,7 @@ async function readBadgeFromApi(deps, mainWindow) {
   const fresh = { accounts: (res.data && res.data.accounts) || [] };
   if (mainWindow) {
     showModuleBadges(mainWindow, fresh);
-    notifyArrivals(mainWindow, fresh);
+    notifyArrivals(mainWindow, badgeCounts(fresh));
   }
   return messagerieBadgeCount(fresh);
 }

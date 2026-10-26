@@ -142,6 +142,23 @@ function describeArrivals(prev, next) {
 }
 
 /**
+ * Jeton et identifiant eleve de la session EN COURS dans la page, a partir
+ * des valeurs brutes de sessionStorage["credentials"] et ["accounts"]. null
+ * si l'une manque ou est illisible (ecran de connexion, session videe).
+ */
+function pageSessionFromStorage(rawCredentials, rawAccounts) {
+  try {
+    const token = JSON.parse(rawCredentials).payload.authToken;
+    const accounts = JSON.parse(rawAccounts).payload.accounts;
+    const account = accounts.find((a) => a.current) || accounts[0];
+    if (typeof token !== "string" || token === "" || !account || account.id === undefined) return null;
+    return { token, eleveId: account.id };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Meme compteur, mais lu dans le sessionStorage de la page plutot que dans
  * une reponse de login : c'est la source gratuite, sans requete.
  *
@@ -174,5 +191,6 @@ module.exports = {
   badgeCounts,
   describeArrivals,
   arrivalMenu,
+  pageSessionFromStorage,
   WATCHED_MODULES,
 };

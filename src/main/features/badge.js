@@ -14,14 +14,11 @@ const { setTrayCount } = require("./tray");
 //
 //   1. les authentifications qu'on fait de toute facon (demarrage, reprise
 //      sur session expiree) : le compteur est deja dans la reponse, gratuit ;
-//   2. sessionStorage["accounts"] de la page, relu localement : gratuit
-//      aussi, et capte les rafraichissements que le SPA fait de lui-meme ;
-//   3. une connexion API dediee, seule capable de faire apparaitre un
-//      NOUVEAU message — le corps des reponses du site nous est inaccessible,
-//      onHeadersReceived ne donne que les en-tetes.
-//
-// La source 3 est donc espacee et bruitee : l'utilisateur est de toute facon
-// notifie sur son telephone, et on veut rester discret cote serveur.
+//   2. la messagerie interrogee avec le jeton de la page : une requete
+//      legere, sans login ni mot de passe, donc frequente ;
+//   3. une connexion API complete, seule a connaitre les compteurs des
+//      notes, devoirs et vie scolaire. Espacee et bruitee : on veut rester
+//      discret cote serveur.
 
 let localTimer = null;
 let remoteTimer = null;
@@ -29,16 +26,17 @@ let remoteTimer = null;
 const DEBUG_BADGE = process.env.NODE_ENV === "development";
 function badgeLog(...args) { if (DEBUG_BADGE) console.log("[BADGE]", ...args); }
 
-// Lecture locale : aucune requete, on peut se permettre d'etre frequent.
-const LOCAL_INTERVAL_MS = 2 * 60 * 1000;
+// Messagerie par le jeton de la page : une requete legere, sans mot de
+// passe. Frequente sans etre insistante.
+const LOCAL_INTERVAL_MS = 5 * 60 * 1000;
 
 // Rafraichissement distant : une connexion complete. Espace, et decale
 // aleatoirement pour ne jamais tomber au meme instant d'un cycle a l'autre.
 const REMOTE_BASE_MS = 30 * 60 * 1000;
 const REMOTE_JITTER_MS = 10 * 60 * 1000;
 
-// Premiere lecture locale peu apres le demarrage : le temps que le SPA
-// hydrate son store.
+// Premiere lecture peu apres le demarrage : le temps que le SPA hydrate
+// son store, ou l'on lit le jeton.
 const FIRST_LOCAL_MS = 5000;
 
 /**
@@ -121,8 +119,8 @@ function startBadgePolling({
 
   badgeLog("Demarrage du suivi du badge");
 
-  setTimeout(() => update("lecture locale initiale", readLocalCount), FIRST_LOCAL_MS);
-  localTimer = setInterval(() => update("lecture locale", readLocalCount), LOCAL_INTERVAL_MS);
+  setTimeout(() => update("messagerie initiale", readLocalCount), FIRST_LOCAL_MS);
+  localTimer = setInterval(() => update("messagerie", readLocalCount), LOCAL_INTERVAL_MS);
 
   // Reprogramme a chaque fois : c'est ce qui rend le decalage aleatoire a
   // chaque cycle, la ou un setInterval fixerait la cadence une fois pour

@@ -141,3 +141,20 @@ test("relogin envoie isReLogin et l'accesstoken sans mot de passe", async () => 
   assert.equal(payload.typeCompte, "E");
   assert.equal(payload.motdepasse, "");
 });
+
+test("unreadMessagesCount lit le compteur avec le jeton de la page", async () => {
+  const { api, calls } = makeApi([{
+    body: { code: 200, data: { pagination: { messagesRecusCount: 71, messagesRecusNotReadCount: 3 } } },
+  }]);
+  const count = await api.unreadMessagesCount({ token: "TOK", eleveId: 5618 });
+
+  assert.equal(count, 3);
+  assert.match(calls[0].url, /\/v3\/eleves\/5618\/messages\.awp\?.*verbe=get/);
+  assert.match(calls[0].url, /v=4\.101\.2/);
+  assert.equal(calls[0].init.headers["X-Token"], "TOK");
+});
+
+test("unreadMessagesCount rend null sur un jeton expire", async () => {
+  const { api } = makeApi([{ body: { code: 520, message: "Token invalide !" } }]);
+  assert.equal(await api.unreadMessagesCount({ token: "OLD", eleveId: 1 }), null);
+});

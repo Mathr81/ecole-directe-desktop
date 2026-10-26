@@ -227,3 +227,18 @@ test("arrivalMenu mene a la messagerie en priorite", () => {
   assert.equal(arrivalMenu({ NOTES: 0 }, { NOTES: 1 }), "Notes");
   assert.equal(arrivalMenu({ NOTES: 2 }, { NOTES: 1 }), null);
 });
+
+const { pageSessionFromStorage } = require("../src/main/auth/session-payload");
+
+test("pageSessionFromStorage extrait jeton et eleve courant", () => {
+  const creds = JSON.stringify({ payload: { authToken: "TOK" }, lastModified: 1 });
+  const accounts = JSON.stringify({ payload: { accounts: [{ id: 1 }, { id: 2, current: true }] } });
+  assert.deepEqual(pageSessionFromStorage(creds, accounts), { token: "TOK", eleveId: 2 });
+});
+
+test("pageSessionFromStorage rend null sans session lisible", () => {
+  const accounts = JSON.stringify({ payload: { accounts: [{ id: 1 }] } });
+  assert.equal(pageSessionFromStorage(null, accounts), null);
+  assert.equal(pageSessionFromStorage(JSON.stringify({ payload: { authToken: "" } }), accounts), null);
+  assert.equal(pageSessionFromStorage("{pas du json", accounts), null);
+});

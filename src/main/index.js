@@ -341,6 +341,12 @@ function setupExpiryRecovery(mainWindow, deps) {
       // Rendre la main tout de suite : la reponse ne doit pas attendre.
       callback({});
 
+      // Seul le trafic de la page dit si SA session expire. Nos propres
+      // appels (badge par le jeton de la page, connexions dediees) passent
+      // par ce meme session.fetch, sans webContents : un 520 de leur part
+      // ne doit pas recharger la page.
+      if (mainWindow.isDestroyed() || details.webContentsId !== mainWindow.webContents.id) return;
+
       const action = watcher.note({ url: details.url, code: readApiCode(details.responseHeaders) });
 
       if (action === "arm") {
@@ -450,7 +456,7 @@ async function main() {
 
   startBadgePolling({
     mainWindow,
-    readLocalCount: () => readBadgeFromPage(mainWindow),
+    readLocalCount: () => readBadgeFromPage(mainWindow, deps.edApi),
     refreshRemoteCount: () => readBadgeFromApi(deps, mainWindow),
     initialCount: state ? messagerieBadgeCount(state) : 0,
   });

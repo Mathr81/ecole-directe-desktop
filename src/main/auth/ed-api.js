@@ -111,7 +111,24 @@ function createEdApi({ fetchImpl, readGtkCookie, apiVersion = DEFAULT_API_VERSIO
     return { cn: data.cn, cv: data.cv };
   }
 
-  return { login, relogin, get2faQuestion, send2faAnswer };
+  // Compteur de non-lus de la messagerie, avec le jeton d'une session deja
+  // ouverte : ni login ni mot de passe. Verifie (scripts/diag-page-token.js) :
+  // le jeton n'est pas renouvele par l'appel, et rien n'est marque lu.
+  // null si la reponse n'est pas exploitable (jeton expire, typiquement).
+  async function unreadMessagesCount({ token, eleveId }) {
+    const { json } = await post(
+      `/v3/eleves/${encodeURIComponent(eleveId)}/messages.awp?force=false&typeRecuperation=received` +
+        "&idClasseur=0&orderBy=date&order=desc&query=&onlyRead=&page=0&itemsPerPage=1&getAll=0&verbe=get",
+      { anneeMessages: "" },
+      { "X-Token": token }
+    );
+    const count = json.code === 200 && json.data && json.data.pagination
+      ? json.data.pagination.messagesRecusNotReadCount
+      : null;
+    return Number.isInteger(count) && count >= 0 ? count : null;
+  }
+
+  return { login, relogin, get2faQuestion, send2faAnswer, unreadMessagesCount };
 }
 
 module.exports = { createEdApi, BASE_URL, DEFAULT_API_VERSION, CODE_2FA_REQUIRED };

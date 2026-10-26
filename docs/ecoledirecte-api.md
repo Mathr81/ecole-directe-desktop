@@ -189,8 +189,14 @@ répond 200 et porte `data.pagination.messagesRecusNotReadCount`, à côté de
 rotation, et le jeton répond toujours 200 après coup. Lire la liste ne marque
 rien comme lu.
 
-Le compteur de la messagerie peut donc se rafraîchir sans login ni mot de
-passe. Les autres modules (notes, devoirs, vie scolaire) n'ont pas
+Le compteur de la messagerie se rafraîchit donc sans login ni mot de passe,
+toutes les 5 minutes (`features/badge-sources.js`).
+
+Ces appels passent par `session.defaultSession.fetch`, comme ceux du site,
+et donc aussi par `webRequest.onHeadersReceived`. Mesuré : les requêtes du
+site portent le `webContentsId` de la fenêtre, les nôtres `undefined`. La
+détection d'expiration ne regarde que les premières : un 520 sur notre
+propre appel ne recharge pas la page. Les autres modules (notes, devoirs, vie scolaire) n'ont pas
 d'équivalent identifié : leurs compteurs ne sont connus que par la réponse
 de login.
 
