@@ -4,6 +4,7 @@
   "version": "2.4.0",
   "description": "Une application desktop pour ÉcoleDirecte, avec authentification par API",
   "main": "src/main/index.js",
+  "packageManager": "pnpm@12.8.1",
   "scripts": {
     "start": "cross-env NODE_ENV=development electron .",
     "test": "node --test \"test/*.test.js\"",
