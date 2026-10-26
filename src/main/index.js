@@ -1,4 +1,4 @@
-const { app, ipcMain, Menu, net, safeStorage, session } = require("electron");
+const { app, ipcMain, Menu, safeStorage, session } = require("electron");
 const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const path = require("path");
 
@@ -9,7 +9,7 @@ const { setupAutoUpdater } = require("./features/updater");
 const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/badge");
 const { setupDownloads } = require("./features/downloads");
 const { setupTray, showWindow, startedHidden } = require("./features/tray");
-const { setupOfflineRecovery, waitUntilOnline } = require("./features/offline");
+const { setupOfflineRecovery, waitBeforeRetry } = require("./features/offline");
 const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
@@ -160,6 +160,9 @@ async function promptTwoFa(parent, { question, propositions }) {
 // AUTHENTIFICATION
 // =========================
 
+// Code du dernier echec d'authentification, ou null apres un succes.
+let lastAuthFailure = null;
+
 async function ensureAuthenticated(mainWindow, deps) {
   const { authFlow, credentialsStore, reloginGuard } = deps;
 
@@ -196,11 +199,13 @@ async function ensureAuthenticated(mainWindow, deps) {
   if (result.status === "ok") {
     setSessionSeed(result.state, credentialsStore.read().faKeys);
     reloginGuard.reset();
+    lastAuthFailure = null;
     console.log(`Authentification réussie (${result.state.accounts.length} compte(s)).`);
     return result.state;
   }
 
   console.error(`Authentification échouée (${result.code}) : ${result.message}`);
+  lastAuthFailure = result.code;
   setSessionSeed(null, []);
   return null;
 }
@@ -408,19 +413,19 @@ async function main() {
     showStatus: (text) => setLoadingStatus(mainWindow, text),
   });
 
-  // Demarrage sans reseau (portable en veille, wifi coupe) : on attend son
-  // retour plutot que d'echouer l'authentification et d'afficher une page
-  // d'erreur.
-  if (!net.isOnline()) {
-    console.warn("Démarrage hors ligne, attente du réseau.");
-    setLoadingStatus(mainWindow, "Pas de connexion à Internet. Reprise automatique dès son retour…");
-    await waitUntilOnline();
-  }
   setLoadingStatus(mainWindow, "Authentification…");
 
   // L'authentification a lieu AVANT toute navigation vers le site : le
   // preload trouve ainsi la session prete et l'ecrit avant le boot d'Angular.
-  const state = await ensureAuthenticated(mainWindow, deps);
+  let state = await ensureAuthenticated(mainWindow, deps);
+
+  // Pas de reseau, ou EcoleDirecte muet : on reessaie en le disant, plutot
+  // que d'ouvrir un site qui ne chargera pas.
+  while (!state && lastAuthFailure === "NETWORK_ERROR") {
+    await waitBeforeRetry((text) => setLoadingStatus(mainWindow, text));
+    setLoadingStatus(mainWindow, "Authentification…");
+    state = await ensureAuthenticated(mainWindow, deps);
+  }
 
   setLoadingStatus(mainWindow, "Chargement d'ÉcoleDirecte…");
   // Un echec de chargement ne doit pas interrompre la suite (badge, mises a
