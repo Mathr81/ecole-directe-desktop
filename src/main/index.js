@@ -1,4 +1,4 @@
-const { app, ipcMain, Menu, safeStorage, session } = require("electron");
+const { app, ipcMain, Menu, Notification, safeStorage, session } = require("electron");
 const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const path = require("path");
 
@@ -25,6 +25,8 @@ const {
   messagerieBadgeFromStoredAccounts,
   moduleBadges,
   describeModuleBadges,
+  badgeCounts,
+  describeArrivals,
 } = require("./auth/session-payload");
 
 // Pastille des compteurs hors messagerie, en bas a gauche.
@@ -389,6 +391,24 @@ function showModuleBadges(mainWindow, state) {
   showNotice(mainWindow, MODULES_NOTICE_ID, summary, { placement: "bottom-left" });
 }
 
+// Compteurs du releve precedent. null tant qu'aucune connexion n'a reussi :
+// le premier releve sert de reference, il ne notifie rien.
+let lastCounts = null;
+
+// Le rafraichissement distant est la seule source capable de voir arriver
+// du nouveau : c'est donc lui, et lui seul, qui notifie.
+function notifyArrivals(mainWindow, state) {
+  const counts = badgeCounts(state);
+  const summary = lastCounts ? describeArrivals(lastCounts, counts) : "";
+  lastCounts = counts;
+  if (!summary || !Notification.isSupported()) return;
+
+  const notification = new Notification({ title: "Mon ÉcoleDirecte", body: summary });
+  notification.on("click", () => showWindow(mainWindow));
+  notification.show();
+  console.log("Notification :", summary);
+}
+
 async function readBadgeFromApi(deps, mainWindow) {
   const { username, password, faKeys } = deps.credentialsStore.read();
   if (!username || !password) return null;
@@ -406,7 +426,10 @@ async function readBadgeFromApi(deps, mainWindow) {
   }
 
   const fresh = { accounts: (res.data && res.data.accounts) || [] };
-  if (mainWindow) showModuleBadges(mainWindow, fresh);
+  if (mainWindow) {
+    showModuleBadges(mainWindow, fresh);
+    notifyArrivals(mainWindow, fresh);
+  }
   return messagerieBadgeCount(fresh);
 }
 
@@ -476,6 +499,7 @@ async function main() {
     // d'attendre le premier scrutage du DOM.
     applyBadge(messagerieBadgeCount(state), mainWindow);
     showModuleBadges(mainWindow, state);
+    lastCounts = badgeCounts(state);
   } else {
     showAuthBanner(mainWindow, "AUTH_ECHOUEE");
   }

@@ -195,3 +195,27 @@ test("le resume enumere les modules", () => {
   ]));
   assert.equal(describeModuleBadges(badges), "3 nouvelles notes · 1 devoir");
 });
+
+const { badgeCounts, describeArrivals } = require("../src/main/auth/session-payload");
+
+test("badgeCounts releve la messagerie et les modules suivis", () => {
+  const counts = badgeCounts(withModules([
+    { code: "MESSAGERIE", badge: 2 },
+    { code: "NOTES", badge: 1 },
+    { code: "AUTRE", badge: 9 },
+  ]));
+  assert.equal(counts.MESSAGERIE, 2);
+  assert.equal(counts.NOTES, 1);
+  assert.equal(counts.CAHIER_DE_TEXTE, 0);
+  assert.equal("AUTRE" in counts, false);
+});
+
+test("describeArrivals ne signale que les hausses", () => {
+  const prev = { MESSAGERIE: 1, NOTES: 3, CAHIER_DE_TEXTE: 0 };
+  const next = { MESSAGERIE: 3, NOTES: 1, CAHIER_DE_TEXTE: 1 };
+  assert.equal(describeArrivals(prev, next), "2 nouveaux messages · 1 devoir");
+});
+
+test("describeArrivals vide quand rien n'a bouge", () => {
+  assert.equal(describeArrivals({ MESSAGERIE: 2 }, { MESSAGERIE: 2 }), "");
+});

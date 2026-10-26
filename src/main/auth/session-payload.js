@@ -98,6 +98,39 @@ function describeModuleBadges(badges) {
   return badges.map((b) => `${b.count} ${b.label}`).join(" · ");
 }
 
+const MESSAGERIE_LABEL = { code: "MESSAGERIE", one: "nouveau message", many: "nouveaux messages" };
+
+/**
+ * Compteurs bruts par module, messagerie comprise : la base de comparaison
+ * des notifications d'un rafraichissement a l'autre.
+ */
+function badgeCounts(state) {
+  const accounts = (state && state.accounts) || [];
+  const account = accounts.find((a) => a.current) || accounts[0];
+  const out = {};
+  if (!account || !Array.isArray(account.modules)) return out;
+
+  for (const { code } of [MESSAGERIE_LABEL, ...WATCHED_MODULES]) {
+    const mod = account.modules.find((m) => m.code === code);
+    out[code] = mod && typeof mod.badge === "number" ? mod.badge : 0;
+  }
+  return out;
+}
+
+/**
+ * Ce qui est arrive entre deux releves, ou "" s'il n'y a rien de neuf. Une
+ * baisse (elements lus entre-temps) ne compte pas.
+ */
+function describeArrivals(prev, next) {
+  return [MESSAGERIE_LABEL, ...WATCHED_MODULES]
+    .map(({ code, one, many }) => {
+      const delta = ((next && next[code]) || 0) - ((prev && prev[code]) || 0);
+      return delta > 0 ? `${delta} ${delta > 1 ? many : one}` : null;
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /**
  * Meme compteur, mais lu dans le sessionStorage de la page plutot que dans
  * une reponse de login : c'est la source gratuite, sans requete.
@@ -128,5 +161,7 @@ module.exports = {
   messagerieBadgeCount,
   moduleBadges,
   describeModuleBadges,
+  badgeCounts,
+  describeArrivals,
   WATCHED_MODULES,
 };
