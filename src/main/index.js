@@ -29,6 +29,9 @@ const {
 // Pastille des compteurs hors messagerie, en bas a gauche.
 const MODULES_NOTICE_ID = "ed-modules-notice";
 
+const ED_ORIGIN = "https://www.ecoledirecte.com/";
+// Code de /v3/login.awp pour « identifiant et/ou mot de passe invalide ».
+const CODE_BAD_CREDENTIALS = 505;
 const LOADING_PAGE = path.join(__dirname, "..", "renderer", "loading", "loading.html");
 const HOME_URL = "https://www.ecoledirecte.com/Accueil";
 const LOGIN_URL = "https://www.ecoledirecte.com/login?cameFrom=%2FAccueil";
@@ -56,8 +59,11 @@ function setSessionSeed(state, faKeys) {
     : null;
 }
 
+// Le preload filtre deja l'origine ; on le reverifie ici, cote confiance :
+// la session ne doit sortir que vers le site lui-meme.
 ipcMain.on("ed:session-seed", (event) => {
-  event.returnValue = currentSessionSeed;
+  const frameUrl = event.senderFrame ? event.senderFrame.url : "";
+  event.returnValue = frameUrl.startsWith(ED_ORIGIN) ? currentSessionSeed : null;
 });
 
 // =========================
@@ -181,16 +187,29 @@ function clearAuthNotice(mainWindow) {
 // FENETRES D'IDENTIFICATION
 // =========================
 
-async function promptCredentials(parent, credentialsStore) {
+// Renvoie true si des identifiants ont ete saisis, false si la fenetre a
+// ete fermee sans valider.
+async function promptCredentials(parent, credentialsStore, errorMessage = null) {
   const loginWindow = await createLoginWindow(parent);
+  if (errorMessage) loginWindow.webContents.send("login-error", errorMessage);
 
-  ipcMain.once("submit-credentials", (event, credentials) => {
-    credentialsStore.writeCredentials(credentials.username, credentials.password);
+  let submitted = false;
+  const onSubmit = (event, credentials) => {
+    if (event.sender !== loginWindow.webContents) return;
+    const { username, password } = credentials || {};
+    if (typeof username !== "string" || typeof password !== "string") return;
+    credentialsStore.writeCredentials(username, password);
+    submitted = true;
     console.log("Identifiants enregistrés.");
     if (!loginWindow.isDestroyed()) loginWindow.close();
-  });
+  };
+  ipcMain.on("submit-credentials", onSubmit);
 
   await new Promise((resolve) => loginWindow.on("closed", resolve));
+  // Sans ce retrait, une fenetre fermee sans valider laissait son ecouteur
+  // en place, et il s'ajoutait a celui de la fenetre suivante.
+  ipcMain.removeListener("submit-credentials", onSubmit);
+  return submitted;
 }
 
 async function promptTwoFa(parent, { question, propositions }) {
@@ -225,6 +244,20 @@ async function ensureAuthenticated(mainWindow, deps) {
   if (result.status === "failed" && result.code === "NO_CREDENTIALS") {
     await promptCredentials(mainWindow, credentialsStore);
     result = await authFlow.authenticate();
+  }
+
+  // Mot de passe change depuis l'enregistrement : sans cette invite,
+  // l'application echouait a chaque demarrage jusqu'a ce qu'on supprime
+  // credentials.json a la main. Une seule invite par appel : le reloginGuard
+  // borne deja le nombre d'appels.
+  if (result.status === "failed" && result.code === CODE_BAD_CREDENTIALS) {
+    console.warn("Identifiants refusés par ÉcoleDirecte, nouvelle saisie demandée.");
+    const submitted = await promptCredentials(
+      mainWindow,
+      credentialsStore,
+      "Identifiant ou mot de passe refusé par ÉcoleDirecte. Vérifiez-les."
+    );
+    if (submitted) result = await authFlow.authenticate();
   }
 
   if (result.status === "needs2fa") {
@@ -293,8 +326,6 @@ function setupReloginOnRedirect(mainWindow, deps) {
 // d'inactivite, il n'y a aucune navigation a intercepter. Le site affiche sa
 // propre modale « Votre session est invalide ou expiree, identifiez-vous a
 // nouveau », qui redemande le mot de passe. On la devance.
-
-const ED_ORIGIN = "https://www.ecoledirecte.com/";
 
 // Ecrit la session fraiche dans la page avant de la recharger. Le
 // sessionStorage survit a un rechargement dans le meme onglet : au reboot
@@ -489,7 +520,7 @@ async function main() {
   };
 
   const extensions = new ElectronChromeExtensions({ session: ses, license: "GPL-3.0" });
-  loadCustomExtension(ses);
+  await loadCustomExtension(ses);
 
   const mainWindow = createMainWindow();
   mainWindowRef = mainWindow;

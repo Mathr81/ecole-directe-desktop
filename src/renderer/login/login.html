@@ -61,6 +61,10 @@
         password.removeAttribute("aria-invalid");
       }
 
+      // Envoye par le processus principal quand les identifiants enregistres
+      // ont ete refuses.
+      ipcRenderer.on("login-error", (event, message) => showError(message));
+
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         clearError();
