@@ -21,7 +21,7 @@ entièrement par l'API ÉcoleDirecte, sans navigateur piloté.
 - **Arrière-plan et notifications** — fermer la fenêtre la garde ouverte dans la zone de notification ; une notification signale les nouveaux messages, notes et devoirs. Le menu de l'icône permet de quitter et de lancer l'app au démarrage
 - **Hors ligne** — sans réseau, l'écran d'attente le dit et l'application repart seule au retour de la connexion
 - **Raccourcis clavier** — `F5` / `Ctrl+R` pour recharger, `F12` pour les DevTools, `Alt+←/→` pour naviguer dans l'historique, `Ctrl+` / `Ctrl-` / `Ctrl+0` pour le zoom (mémorisé)
-- **Mises à jour automatiques** — l'application vérifie et télécharge les nouvelles versions en arrière-plan via GitHub Releases
+- **Mises à jour automatiques** — l'application vérifie et télécharge les nouvelles versions en arrière-plan via GitHub Releases. Sur macOS, l'application n'étant pas signée, elle annonce la nouvelle version et ouvre la page de téléchargement
 
 ---
 
