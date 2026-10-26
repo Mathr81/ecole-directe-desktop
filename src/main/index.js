@@ -396,7 +396,7 @@ async function main() {
   };
 
   const extensions = new ElectronChromeExtensions({ session: ses, license: "GPL-3.0" });
-  await loadCustomExtension(ses);
+  await loadCustomExtension(ses, userDataPath);
 
   const mainWindow = createMainWindow();
   mainWindowRef = mainWindow;
