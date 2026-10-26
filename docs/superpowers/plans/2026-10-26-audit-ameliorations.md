@@ -40,14 +40,15 @@ Cases à cocher pour suivre l'avancement. Ordre = priorité.
 
 ## Phase 3 — Dette
 
-- [ ] Remplacer `showAuthBanner` / `showAuthNotice` / `clear*` de `index.js`
+- [x] Remplacer `showAuthBanner` / `showAuthNotice` / `clear*` de `index.js`
       par `features/page-notice.js` (tons `error` et `info` déjà présents).
-- [ ] Sortir la reprise sur expiration et la lecture du badge de `index.js`
-      (576 lignes) vers `auth/` et `features/`.
-- [ ] Migrer login, 2FA, palette, téléchargements et mise à jour sous
+- [ ] *Reporté.* Sortir la reprise sur expiration et la lecture du badge de
+      `index.js` (527 lignes après le nettoyage des bandeaux). Aucun gain
+      fonctionnel ; à faire quand on y touchera pour la phase 2 ou 4.
+- [x] Migrer login, 2FA, palette, téléchargements et mise à jour sous
       preload + `contextIsolation`.
-- [ ] README : section « Structure » périmée, mentionner macOS et Linux.
-- [ ] Remplacer `canvas` (dépendance native) par des PNG de badge
+- [x] README : section « Structure » périmée, mentionner macOS et Linux.
+- [x] Remplacer `canvas` (dépendance native) par des PNG de badge
       pré-générés (1–9, 9+).
 
 ## Phase 4 — Fonctionnalités

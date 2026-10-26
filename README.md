@@ -16,14 +16,17 @@ entièrement par l'API ÉcoleDirecte, sans navigateur piloté.
 - **Écran de démarrage** — l'application indique ce qu'elle fait pendant l'authentification et le chargement du site, au lieu d'une fenêtre blanche
 - **Badge de notifications** — le nombre de notifications non lues s'affiche sur l'icône dans la barre des tâches Windows
 - **Liens externes dans une popup intégrée** — les liens ouverts depuis ÉcoleDirecte s'affichent dans une mini-fenêtre avec barre d'outils (copier l'URL, ouvrir dans le navigateur)
-- **Raccourcis clavier** — `F5` / `Ctrl+R` pour recharger, `F12` pour les DevTools, `Alt+←/→` pour naviguer dans l'historique
+- **Palette de navigation** — `Ctrl+K` pour aller à n'importe quelle page du site en tapant quelques lettres
+- **Téléchargements intégrés** — les pièces jointes partent dans le dossier Téléchargements, avec l'avancement et des boutons pour ouvrir le fichier ou son dossier
+- **Raccourcis clavier** — `F5` / `Ctrl+R` pour recharger, `F12` pour les DevTools, `Alt+←/→` pour naviguer dans l'historique, `Ctrl+` / `Ctrl-` / `Ctrl+0` pour le zoom (mémorisé)
 - **Mises à jour automatiques** — l'application vérifie et télécharge les nouvelles versions en arrière-plan via GitHub Releases
 
 ---
 
 ## Installation
 
-Télécharge le dernier installeur `.exe` depuis les [Releases GitHub](../../releases/latest) et lance-le.
+Télécharge le dernier installeur depuis les [Releases GitHub](../../releases/latest) :
+`.exe` pour Windows, `.dmg` pour macOS (non signé), `.AppImage` pour Linux.
 
 Au premier démarrage, une fenêtre te demande tes identifiants ÉcoleDirecte. Ils sont ensuite sauvegardés chiffrés et tu n'as plus à les retaper.
 
@@ -80,7 +83,15 @@ suffisent, `.gitignore` ne protège que de git.
 pnpm run build
 ```
 
-L'installeur `.exe` est généré dans le dossier `dist/`.
+L'installeur de la plateforme courante est généré dans le dossier `dist/`.
+
+### Tests
+
+```bash
+pnpm test
+```
+
+Ils tournent aussi en CI sur chaque push et pull request, et avant chaque release.
 
 ---
 
@@ -102,15 +113,21 @@ La GitHub Action se charge du build et de la création de la Release automatique
 ## Structure du projet
 
 ```
-├── index.js              # Point d'entrée principal (main process)
-├── login.html            # Fenêtre de saisie des identifiants
-├── popup.html            # Fenêtre pour les liens externes
-├── CustomDirecte/        # Extension chargée dans l'app
-├── assets/
-│   └── icons/            # Icônes de l'application
-└── .github/
-    └── workflows/
-        └── release.yml   # CI/CD — build et publication automatique
+├── src/
+│   ├── main/
+│   │   ├── index.js      # Point d'entrée : authentification, reprise de session, badge
+│   │   ├── auth/         # Client API ÉcoleDirecte, 2FA, identifiants chiffrés
+│   │   ├── features/     # Badge, téléchargements, palette, raccourcis, mises à jour
+│   │   ├── windows/      # Fenêtres et politique d'ouverture des liens
+│   │   └── lib/          # Journal, chemins, géométrie des fenêtres
+│   ├── preload/          # Ponts entre le processus principal et les pages
+│   └── renderer/         # Pages des fenêtres maison (connexion, 2FA, popup…)
+├── test/                 # Tests unitaires (node:test)
+├── scripts/              # Patch de l'extension, scripts de diagnostic
+├── CustomDirecte/        # Extension chargée dans l'app (sous-module git)
+├── assets/               # Icônes et pastilles du badge
+├── docs/                 # Comportements de l'API et pièges rencontrés
+└── .github/workflows/    # Tests et release
 ```
 
 ---
