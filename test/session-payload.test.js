@@ -219,3 +219,11 @@ test("describeArrivals ne signale que les hausses", () => {
 test("describeArrivals vide quand rien n'a bouge", () => {
   assert.equal(describeArrivals({ MESSAGERIE: 2 }, { MESSAGERIE: 2 }), "");
 });
+
+const { arrivalMenu } = require("../src/main/auth/session-payload");
+
+test("arrivalMenu mene a la messagerie en priorite", () => {
+  assert.equal(arrivalMenu({ MESSAGERIE: 0, NOTES: 0 }, { MESSAGERIE: 1, NOTES: 2 }), "Messagerie");
+  assert.equal(arrivalMenu({ NOTES: 0 }, { NOTES: 1 }), "Notes");
+  assert.equal(arrivalMenu({ NOTES: 2 }, { NOTES: 1 }), null);
+});

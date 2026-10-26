@@ -61,10 +61,12 @@ function messagerieBadgeCount(state) {
 // Modules dont le compteur nous interesse, avec leur libelle au singulier
 // et au pluriel. La messagerie n'y est pas : elle a son propre traitement
 // et sa propre destination, le badge de la barre des taches.
+// `menu` est le libelle du lien correspondant dans le menu du site : c'est
+// par lui, et non par une route codee en dur, qu'une notification y mene.
 const WATCHED_MODULES = [
-  { code: "NOTES", one: "nouvelle note", many: "nouvelles notes" },
-  { code: "VIE_SCOLAIRE", one: "élément de vie scolaire", many: "éléments de vie scolaire" },
-  { code: "CAHIER_DE_TEXTE", one: "devoir", many: "devoirs" },
+  { code: "NOTES", one: "nouvelle note", many: "nouvelles notes", menu: "Notes" },
+  { code: "VIE_SCOLAIRE", one: "élément de vie scolaire", many: "éléments de vie scolaire", menu: "Vie scolaire" },
+  { code: "CAHIER_DE_TEXTE", one: "devoir", many: "devoirs", menu: "Cahier de textes" },
 ];
 
 /**
@@ -98,7 +100,7 @@ function describeModuleBadges(badges) {
   return badges.map((b) => `${b.count} ${b.label}`).join(" · ");
 }
 
-const MESSAGERIE_LABEL = { code: "MESSAGERIE", one: "nouveau message", many: "nouveaux messages" };
+const MESSAGERIE_LABEL = { code: "MESSAGERIE", one: "nouveau message", many: "nouveaux messages", menu: "Messagerie" };
 
 /**
  * Compteurs bruts par module, messagerie comprise : la base de comparaison
@@ -115,6 +117,14 @@ function badgeCounts(state) {
     out[code] = mod && typeof mod.badge === "number" ? mod.badge : 0;
   }
   return out;
+}
+
+/** Libelle de menu du premier module en hausse, messagerie d'abord, ou null. */
+function arrivalMenu(prev, next) {
+  const hit = [MESSAGERIE_LABEL, ...WATCHED_MODULES].find(
+    ({ code }) => ((next && next[code]) || 0) > ((prev && prev[code]) || 0)
+  );
+  return hit ? hit.menu : null;
 }
 
 /**
@@ -163,5 +173,6 @@ module.exports = {
   describeModuleBadges,
   badgeCounts,
   describeArrivals,
+  arrivalMenu,
   WATCHED_MODULES,
 };

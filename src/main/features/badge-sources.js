@@ -3,6 +3,8 @@
 const { Notification } = require("electron");
 const { showNotice, clearNotice } = require("./page-notice");
 const { showWindow } = require("./tray");
+const { filterEntries } = require("./palette");
+const { collectEntries } = require("../windows/palette-window");
 const {
   messagerieBadgeCount,
   messagerieBadgeFromStoredAccounts,
@@ -10,6 +12,7 @@ const {
   describeModuleBadges,
   badgeCounts,
   describeArrivals,
+  arrivalMenu,
 } = require("../auth/session-payload");
 
 const ED_ORIGIN = "https://www.ecoledirecte.com/";
@@ -53,13 +56,24 @@ let lastCounts = null;
 function notifyArrivals(mainWindow, state) {
   const counts = badgeCounts(state);
   const summary = lastCounts ? describeArrivals(lastCounts, counts) : "";
+  const menu = lastCounts ? arrivalMenu(lastCounts, counts) : null;
   lastCounts = counts;
   if (!summary || !Notification.isSupported()) return;
 
   const notification = new Notification({ title: "Mon ÉcoleDirecte", body: summary });
-  notification.on("click", () => showWindow(mainWindow));
+  notification.on("click", () => openArrival(mainWindow, menu));
   notification.show();
   console.log("Notification :", summary);
+}
+
+// Ramene la fenetre et, si le menu du site a un lien de ce nom, l'ouvre.
+// Le lien est cherche dans la page, comme pour la palette : aucune route
+// d'EcoleDirecte n'est codee en dur.
+async function openArrival(mainWindow, menu) {
+  showWindow(mainWindow);
+  if (!menu) return;
+  const [target] = filterEntries(await collectEntries(mainWindow), menu, 1);
+  if (target && !mainWindow.isDestroyed()) mainWindow.loadURL(target.href);
 }
 
 // Source payante : une connexion dediee, seule capable de faire apparaitre
