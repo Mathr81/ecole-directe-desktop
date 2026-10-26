@@ -1,4 +1,4 @@
-const { app, dialog, ipcMain, Menu, net, Notification, safeStorage, session, shell } = require("electron");
+const { app, ipcMain, Menu, net, safeStorage, session } = require("electron");
 const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const path = require("path");
 
@@ -24,15 +24,14 @@ const {
   toSessionStorageEntries,
   toLocalStorageEntries,
   messagerieBadgeCount,
-  messagerieBadgeFromStoredAccounts,
-  moduleBadges,
-  describeModuleBadges,
-  badgeCounts,
-  describeArrivals,
 } = require("./auth/session-payload");
-
-// Pastille des compteurs hors messagerie, en bas a gauche.
-const MODULES_NOTICE_ID = "ed-modules-notice";
+const {
+  readBadgeFromPage,
+  readBadgeFromApi,
+  showModuleBadges,
+  rememberCounts,
+} = require("./features/badge-sources");
+const { paletteActions } = require("./features/palette-actions");
 
 const ED_ORIGIN = "https://www.ecoledirecte.com/";
 // Code de /v3/login.awp pour « identifiant et/ou mot de passe invalide ».
@@ -356,130 +355,6 @@ function setupExpiryRecovery(mainWindow, deps) {
 }
 
 // =========================
-// LECTURE DU BADGE
-// =========================
-
-// Source gratuite : le store du SPA, deja dans la page. Il ne bouge que
-// quand le site se reconnecte de lui-meme, mais ca ne coute rien de le lire.
-async function readBadgeFromPage(mainWindow) {
-  if (mainWindow.isDestroyed()) return null;
-  if (!mainWindow.webContents.getURL().startsWith(ED_ORIGIN)) return null;
-
-  const raw = await mainWindow.webContents.executeJavaScript(
-    'sessionStorage.getItem("accounts")'
-  );
-  return messagerieBadgeFromStoredAccounts(raw);
-}
-
-// Source payante : une connexion dediee, seule capable de faire apparaitre
-// un nouveau message.
-//
-// Volontairement en dehors d'authFlow : sur un code 250, celui-ci effacerait
-// les cles fa et demanderait la question de double authentification. Un
-// rafraichissement de badge doit rester en lecture seule.
-/**
- * Montre les compteurs des modules autres que la messagerie.
- *
- * Ces valeurs voyagent dans la reponse de login qu'on recupere DEJA pour le
- * badge : les afficher ne declenche aucune requete de plus. La pastille
- * disparait d'elle-meme quand il n'y a plus rien a signaler.
- */
-function showModuleBadges(mainWindow, state) {
-  const summary = describeModuleBadges(moduleBadges(state));
-  if (!summary) {
-    clearNotice(mainWindow, MODULES_NOTICE_ID);
-    return;
-  }
-  showNotice(mainWindow, MODULES_NOTICE_ID, summary, { placement: "bottom-left" });
-}
-
-// Compteurs du releve precedent. null tant qu'aucune connexion n'a reussi :
-// le premier releve sert de reference, il ne notifie rien.
-let lastCounts = null;
-
-// Le rafraichissement distant est la seule source capable de voir arriver
-// du nouveau : c'est donc lui, et lui seul, qui notifie.
-function notifyArrivals(mainWindow, state) {
-  const counts = badgeCounts(state);
-  const summary = lastCounts ? describeArrivals(lastCounts, counts) : "";
-  lastCounts = counts;
-  if (!summary || !Notification.isSupported()) return;
-
-  const notification = new Notification({ title: "Mon ÉcoleDirecte", body: summary });
-  notification.on("click", () => showWindow(mainWindow));
-  notification.show();
-  console.log("Notification :", summary);
-}
-
-async function readBadgeFromApi(deps, mainWindow) {
-  const { username, password, faKeys } = deps.credentialsStore.read();
-  if (!username || !password) return null;
-
-  const res = await deps.edApi.login({
-    identifiant: username,
-    motdepasse: password,
-    uuid: deps.credentialsStore.ensureDeviceUuid(),
-    fa: faKeys,
-  });
-
-  if (res.code !== 200) {
-    console.warn(`Rafraîchissement du badge : code ${res.code}, valeur conservée.`);
-    return null;
-  }
-
-  const fresh = { accounts: (res.data && res.data.accounts) || [] };
-  if (mainWindow) {
-    showModuleBadges(mainWindow, fresh);
-    notifyArrivals(mainWindow, fresh);
-  }
-  return messagerieBadgeCount(fresh);
-}
-
-// =========================
-// ACTIONS DE LA PALETTE (Ctrl+K)
-// =========================
-
-// Repart de zero : identifiants, cles 2FA, et le stockage du site qui les
-// recopie (localStorage["fa"]). Le redemarrage rouvre la fenetre de connexion.
-async function switchAccount(mainWindow, deps) {
-  const { response } = await dialog.showMessageBox(mainWindow, {
-    type: "question",
-    buttons: ["Changer de compte", "Annuler"],
-    defaultId: 1,
-    cancelId: 1,
-    title: "Changer de compte",
-    message: "Oublier les identifiants enregistrés et redémarrer ?",
-    detail: "La fenêtre de connexion s'ouvrira au redémarrage.",
-  });
-  if (response !== 0) return;
-
-  deps.credentialsStore.clearAccount();
-  await session.defaultSession.clearStorageData({
-    origin: "https://www.ecoledirecte.com",
-    storages: ["localstorage"],
-  });
-  console.log("Changement de compte : identifiants effacés, redémarrage.");
-  app.relaunch();
-  app.exit(0);
-}
-
-function paletteActions(mainWindow, deps, updater) {
-  const actions = [
-    { id: "reload", label: "Recharger la page", run: () => mainWindow.webContents.reload() },
-    { id: "switch-account", label: "Changer de compte", run: () => switchAccount(mainWindow, deps) },
-    {
-      id: "open-log",
-      label: "Ouvrir le journal (app.log)",
-      run: () => shell.openPath(path.join(userDataPath, "app.log")),
-    },
-  ];
-  if (updater) {
-    actions.push({ id: "check-update", label: "Vérifier les mises à jour", run: updater.checkNow });
-  }
-  return actions;
-}
-
-// =========================
 // MAIN
 // =========================
 
@@ -563,7 +438,7 @@ async function main() {
     // d'attendre le premier scrutage du DOM.
     applyBadge(messagerieBadgeCount(state), mainWindow);
     showModuleBadges(mainWindow, state);
-    lastCounts = badgeCounts(state);
+    rememberCounts(state);
   } else {
     showAuthBanner(mainWindow, "AUTH_ECHOUEE");
   }
@@ -575,7 +450,7 @@ async function main() {
     initialCount: state ? messagerieBadgeCount(state) : 0,
   });
   const updater = setupAutoUpdater(mainWindow);
-  setPaletteActions(paletteActions(mainWindow, deps, updater));
+  setPaletteActions(paletteActions(mainWindow, deps, { updater, logFile: path.join(userDataPath, "app.log") }));
 
   // Les pieces jointes d'EcoleDirecte partent directement dans le dossier
   // Telechargements, sans boite de dialogue, avec l'avancement en bas a

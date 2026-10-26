@@ -42,9 +42,10 @@ Cases à cocher pour suivre l'avancement. Ordre = priorité.
 
 - [x] Remplacer `showAuthBanner` / `showAuthNotice` / `clear*` de `index.js`
       par `features/page-notice.js` (tons `error` et `info` déjà présents).
-- [ ] *Reporté.* Sortir la reprise sur expiration et la lecture du badge de
-      `index.js` (527 lignes après le nettoyage des bandeaux). Aucun gain
-      fonctionnel ; à faire quand on y touchera pour la phase 2 ou 4.
+- [x] Alléger `index.js` (621 lignes après la phase 4) : lecture du badge et
+      notifications dans `features/badge-sources.js`, actions de la palette
+      dans `features/palette-actions.js`. 497 lignes. La reprise sur
+      expiration reste dans `index.js`, trop liée à `ensureAuthenticated`.
 - [x] Migrer login, 2FA, palette, téléchargements et mise à jour sous
       preload + `contextIsolation`.
 - [x] README : section « Structure » périmée, mentionner macOS et Linux.
@@ -56,6 +57,7 @@ Cases à cocher pour suivre l'avancement. Ordre = priorité.
 - [x] Notifications natives (nouveau message / note / devoir) : comparer les
       compteurs de `moduleBadges` d'un rafraîchissement à l'autre.
 - [x] Icône dans la zone de notification, réduction en arrière-plan.
+      Lancée au démarrage de l'ordinateur, l'app part réduite (`--hidden`).
 - [x] Lancement au démarrage (`app.setLoginItemSettings`), case du menu de
       l'icône, active seulement dans l'application installée.
 - [x] Actions dans la palette Ctrl+K : se déconnecter / changer de compte,
