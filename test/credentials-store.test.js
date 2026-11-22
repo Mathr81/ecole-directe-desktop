@@ -154,3 +154,20 @@ test("clearAccount efface identifiants et cles 2FA, garde l'uuid d'appareil", ()
   assert.deepEqual(after.faKeys, []);
   assert.equal(after.deviceUuid, uuid);
 });
+
+test("saveReloginToken fait un aller-retour chiffre, null l'efface, clearAccount aussi", () => {
+  const file = tmpFile();
+  const store = createCredentialsStore(file, fakeSafeStorage);
+  const entry = { identifiant: "u", typeCompte: "E", accessToken: "AT" };
+
+  store.saveReloginToken(entry);
+  assert.deepEqual(store.read().reloginToken, entry);
+  assert.equal(fs.readFileSync(file, "utf8").includes("\"AT\""), false, "le jeton doit etre chiffre");
+
+  store.saveReloginToken(null);
+  assert.equal(store.read().reloginToken, null);
+
+  store.saveReloginToken(entry);
+  store.clearAccount();
+  assert.equal(store.read().reloginToken, null);
+});

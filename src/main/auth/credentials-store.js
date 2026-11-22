@@ -29,7 +29,7 @@ function createCredentialsStore(filePath, safeStorage) {
   function read() {
     const raw = readRaw();
     if (!safeStorage.isEncryptionAvailable()) {
-      return { username: null, password: null, deviceUuid: null, faKeys: [] };
+      return { username: null, password: null, deviceUuid: null, faKeys: [], reloginToken: null };
     }
 
     const safe = (value, fallback) => {
@@ -41,11 +41,17 @@ function createCredentialsStore(filePath, safeStorage) {
       faKeys = raw.faKeys ? JSON.parse(dec(raw.faKeys)) : [];
     } catch { faKeys = []; }
 
+    let reloginToken = null;
+    try {
+      reloginToken = raw.reloginToken ? JSON.parse(dec(raw.reloginToken)) : null;
+    } catch { reloginToken = null; }
+
     return {
       username: safe(raw.username, null),
       password: safe(raw.password, null),
       deviceUuid: safe(raw.deviceUuid, null),
       faKeys: Array.isArray(faKeys) ? faKeys : [],
+      reloginToken: reloginToken && reloginToken.accessToken ? reloginToken : null,
     };
   }
 
@@ -88,10 +94,32 @@ function createCredentialsStore(filePath, safeStorage) {
     delete raw.username;
     delete raw.password;
     delete raw.faKeys;
+    delete raw.reloginToken;
     writeRaw(raw);
   }
 
-  return { read, writeCredentials, ensureDeviceUuid, saveFaKeys, clearFaKeys, clearAccount };
+  // { identifiant, typeCompte, accessToken } du mode mobile, ou null pour
+  // l'effacer. L'accessToken change a chaque relogin : on garde le dernier.
+  function saveReloginToken(entry) {
+    const raw = readRaw();
+    if (!entry) {
+      delete raw.reloginToken;
+    } else {
+      if (!safeStorage.isEncryptionAvailable()) return;
+      raw.reloginToken = enc(JSON.stringify(entry));
+    }
+    writeRaw(raw);
+  }
+
+  return {
+    read,
+    writeCredentials,
+    ensureDeviceUuid,
+    saveFaKeys,
+    clearFaKeys,
+    saveReloginToken,
+    clearAccount,
+  };
 }
 
 module.exports = { createCredentialsStore };

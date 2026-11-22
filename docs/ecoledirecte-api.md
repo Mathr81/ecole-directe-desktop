@@ -164,14 +164,49 @@ C'est ce qui autorise à rafraîchir le badge par un `login.awp` dédié sans
 casser la session de la page. Sans cette garantie, chaque rafraîchissement
 aurait déclenché la reprise sur session expirée, en boucle.
 
-### Le relogin par jeton n'est pas une alternative, du moins pour un élève
+### Le relogin par jeton n'existe qu'en se présentant comme l'app mobile
 
-Vérifié par `scripts/diag-relogin.js` le 26/10/2026 sur un compte élève
-(`typeCompte E`) : la réponse de login porte un `accounts[].accessToken`
-**vide**. `relogin.awp` (`isReLogin: true`, sans mot de passe) répond donc
-`505 « Identifiant et/ou mot de passe invalide »`, avec ou sans en-tête
-`X-Token`. Le badge garde le login complet. Peut-être différent pour un
-compte parent, non vérifié.
+Vérifié le 22/11/2026 sur un compte élève (`typeCompte E`).
+
+En mode navigateur, la réponse de login porte un `accounts[].accessToken`
+**vide**, même avec `sesouvenirdemoi: true` : le relogin répond `505`
+(constat du 26/10/2026 par `scripts/diag-relogin.js`).
+
+En se présentant comme l'application mobile, l'`accessToken` est rempli
+(504 caractères) :
+
+- User-Agent contenant `EDMOBILE v8.0.0` (celui de BlocksDirecte, dans
+  `api-researchs/`), **et** `v=8.0.0` en paramètre. Avec l'UA mobile mais
+  `v=4.104.4`, le login répond `505`.
+- Le site lui-même repère l'app par `navigateur.includes("EDMOBILE")` dans
+  l'historique des connexions.
+
+Le relogin est celui du SPA natif (`refreshToken` dans le chunk principal) :
+`GET login?gtk=1` puis `POST login` avec `{ identifiant, typeCompte,
+motdepasse: "???", accesstoken, isReLogin: true, uuid, fa }`. Il répond 200
+et renvoie un **nouvel** `accessToken` ; l'ancien reste accepté juste après.
+
+**Un jeton (`X-Token`) est lié au User-Agent qui l'a obtenu**, pas à la
+version : un jeton mobile répond `525` avec l'UA du navigateur et `200` avec
+l'UA mobile (quelle que soit `v`) ; un jeton navigateur répond `520` avec
+l'UA mobile. D'où, dans l'application, la réécriture de l'UA des appels de la
+page quand sa session vient du mode mobile (`setupPageUserAgent`, hors
+endpoints d'authentification).
+
+Le SPA est le même code Angular/Ionic sur le web et dans l'app : son
+intercepteur, sur 520/525/401, affiche la modale « session expirée » si
+`isBrowser`, et sinon rafraîchit le jeton en silence puis rejoue la requête.
+
+Repli : si le login mobile renvoie autre chose que 200 ou 250 (version
+mobile périmée par exemple), `ed-api.login` retente en mode navigateur.
+
+### Notifications push : FCM côté app native seulement
+
+`POST registrationAppToken?verbe=put` avec `{ idUser, codeOgec, role,
+registrationToken, oldRegistrationToken, instanceId }` enregistre le jeton
+FCM ; `verbe=delete` le retire à la déconnexion. Rien ne l'appelle sur le web
+(`instanceId` y vaut `"navigator"`), et la configuration Firebase n'est pas
+dans le JS du site : elle est dans l'APK. Non tenté.
 
 ### Le jeton de la page suffit pour le compteur de la messagerie
 

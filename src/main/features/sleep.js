@@ -19,7 +19,7 @@ const HAS_DRAFT = `[...document.querySelectorAll('textarea, input[type="text"], 
 
 let waking = null;
 
-function setupSleep(mainWindow, { loadingPage, showStatus }) {
+function setupSleep(mainWindow, { loadingPage, showStatus, beforeWake = async () => {} }) {
   let timer = null;
   let asleepUrl = null;
 
@@ -54,6 +54,9 @@ function setupSleep(mainWindow, { loadingPage, showStatus }) {
     console.log("Réveil : rechargement de", url.slice(0, 110));
     await mainWindow.loadFile(loadingPage);
     showStatus("Chargement d'ÉcoleDirecte…");
+    // Session renouvelee avant le rechargement : sinon le premier clic
+    // tomberait sur un jeton expire pendant la veille.
+    await beforeWake().catch((err) => console.warn("Renouvellement au réveil échoué :", err.message));
     await mainWindow.loadURL(url).catch((err) => console.warn("Réveil incomplet :", err.message));
   }
 

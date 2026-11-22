@@ -30,7 +30,8 @@ const MODULES_NOTICE_ID = "ed-modules-notice";
 // dechargee, et c'est elle qui sert alors.
 let lastPageSession = null;
 
-async function readBadgeFromPage(mainWindow, edApi) {
+// `mode` : celui du jeton de la page, auquel il est lie (voir ed-api.js).
+async function readBadgeFromPage(mainWindow, edApi, mode = "browser") {
   if (mainWindow.isDestroyed()) return null;
 
   if (mainWindow.webContents.getURL().startsWith(ED_ORIGIN)) {
@@ -42,7 +43,7 @@ async function readBadgeFromPage(mainWindow, edApi) {
   const pageSession = lastPageSession;
   if (!pageSession) return null;
 
-  const count = await edApi.unreadMessagesCount(pageSession);
+  const count = await edApi.unreadMessagesCount({ ...pageSession, mode: mode || "browser" });
   if (count !== null) notifyArrivals(mainWindow, { MESSAGERIE: count });
   return count;
 }

@@ -15,6 +15,8 @@ function buildSessionState(loginResponse, now) {
   const data = loginResponse.data || {};
   return {
     authToken: loginResponse.token || "",
+    // Mode d'API qui a delivre le jeton : la page doit parler dans le meme.
+    mode: loginResponse.mode || "browser",
     accounts: Array.isArray(data.accounts) ? data.accounts : [],
     changementMDP: data.changementMDP !== undefined ? data.changementMDP : false,
     nbJourMdpExire: data.nbJourMdpExire !== undefined ? data.nbJourMdpExire : 0,

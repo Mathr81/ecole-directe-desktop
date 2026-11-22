@@ -19,17 +19,17 @@ try {
 
   // On ne reamorce pas a chaque navigation : une session en cours
   // d'utilisation peut etre plus fraiche que celle detenue par le
-  // processus principal, le token pouvant tourner cote serveur.
-  if (isLoginUrl || !hasSession) {
-    const seed = ipcRenderer.sendSync("ed:session-seed");
+  // processus principal, le token pouvant tourner cote serveur. Le
+  // processus principal peut toutefois l'exiger (session renouvelee au
+  // reveil) : c'est lui qui tranche, d'apres le booleen envoye.
+  const seed = ipcRenderer.sendSync("ed:session-seed", isLoginUrl || !hasSession);
 
-    if (seed) {
-      for (const [key, value] of Object.entries(seed.session || {})) {
-        sessionStorage.setItem(key, value);
-      }
-      for (const [key, value] of Object.entries(seed.local || {})) {
-        localStorage.setItem(key, value);
-      }
+  if (seed) {
+    for (const [key, value] of Object.entries(seed.session || {})) {
+      sessionStorage.setItem(key, value);
+    }
+    for (const [key, value] of Object.entries(seed.local || {})) {
+      localStorage.setItem(key, value);
     }
   }
 } catch (err) {

@@ -13,8 +13,9 @@ const { CODE_2FA_REQUIRED } = require("./ed-api");
 
 const CODE_OK = 200;
 
-function createAuthFlow({ edApi, credentialsStore, now = Date.now }) {
+function createAuthFlow({ edApi, credentialsStore, now = Date.now, warn = console.warn }) {
   let pendingTwoFaToken = null;
+  let pendingTwoFaMode = "browser";
 
   function runLogin(faKeys) {
     const { username, password } = credentialsStore.read();
@@ -30,11 +31,28 @@ function createAuthFlow({ edApi, credentialsStore, now = Date.now }) {
     return { status: "failed", code, message };
   }
 
+  // Seul le mode mobile delivre un accessToken. Un login reussi en mode
+  // navigateur efface l'ancien : il ne servirait qu'a echouer.
+  function rememberReloginToken(state) {
+    const account = state.accounts.find((a) => a.current) || state.accounts[0];
+    if (state.mode === "mobile" && account && account.accessToken) {
+      credentialsStore.saveReloginToken({
+        identifiant: account.identifiant,
+        typeCompte: account.typeCompte,
+        accessToken: account.accessToken,
+      });
+    } else {
+      credentialsStore.saveReloginToken(null);
+    }
+  }
+
   function fromLoginResponse(res) {
     if (res.code !== CODE_OK) {
       return failed(res.code, res.message || "Connexion refusée.");
     }
-    return { status: "ok", state: buildSessionState(res, now()) };
+    const state = buildSessionState(res, now());
+    rememberReloginToken(state);
+    return { status: "ok", state };
   }
 
   async function askTwoFaQuestion(res, hadFaKeys) {
@@ -44,7 +62,8 @@ function createAuthFlow({ edApi, credentialsStore, now = Date.now }) {
     if (hadFaKeys) credentialsStore.clearFaKeys();
 
     pendingTwoFaToken = res.twoFaToken;
-    const question = await edApi.get2faQuestion(pendingTwoFaToken);
+    pendingTwoFaMode = res.mode || "browser";
+    const question = await edApi.get2faQuestion(pendingTwoFaToken, pendingTwoFaMode);
 
     return {
       status: "needs2fa",
@@ -76,7 +95,7 @@ function createAuthFlow({ edApi, credentialsStore, now = Date.now }) {
     }
 
     try {
-      const { cn, cv } = await edApi.send2faAnswer(answer, pendingTwoFaToken);
+      const { cn, cv } = await edApi.send2faAnswer(answer, pendingTwoFaToken, pendingTwoFaMode);
       if (!cn || !cv) {
         return failed("BAD_2FA_ANSWER", "Réponse incorrecte.");
       }
@@ -93,7 +112,30 @@ function createAuthFlow({ edApi, credentialsStore, now = Date.now }) {
     }
   }
 
-  return { authenticate, submit2faAnswer };
+  // Comme l'application mobile : reconnexion par accessToken, sans mot de
+  // passe. Sans jeton, ou s'il est refuse, connexion complete.
+  async function refresh() {
+    const { reloginToken, faKeys } = credentialsStore.read();
+    if (reloginToken) {
+      try {
+        const res = await edApi.relogin({
+          identifiant: reloginToken.identifiant,
+          typeCompte: reloginToken.typeCompte,
+          accesstoken: reloginToken.accessToken,
+          uuid: credentialsStore.ensureDeviceUuid(),
+          fa: faKeys,
+        });
+        if (res.code === CODE_OK) return fromLoginResponse(res);
+        warn(`Reconnexion par jeton refusée (code ${res.code}), connexion complète.`);
+        credentialsStore.saveReloginToken(null);
+      } catch (err) {
+        return failed("NETWORK_ERROR", err.message);
+      }
+    }
+    return authenticate();
+  }
+
+  return { authenticate, refresh, submit2faAnswer };
 }
 
 module.exports = { createAuthFlow };
