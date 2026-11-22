@@ -6,10 +6,12 @@
 // En test ce sont des bouchons, ce qui rend ce module testable sans reseau.
 //
 // Deux modes, voir docs/ecoledirecte-api.md :
+//   - "browser" : le site web. C'est celui de la page, et de login().
 //   - "mobile" : on se presente comme l'application mobile. Seul ce mode
 //     recoit un accessToken, qui permet de se reconnecter sans mot de passe.
-//   - "browser" : le site web. Repli si EcoleDirecte refuse le mode mobile
-//     (version de l'application changee, typiquement).
+//     Il ne sert qu'au badge : le serveur ne repond pas tout a fait pareil a
+//     l'app (cahier de texte « a venir » avec les jours passes, par exemple),
+//     la page ne doit donc jamais l'utiliser.
 // Un jeton est lie au User-Agent qui l'a obtenu : chaque appel qui porte un
 // jeton doit repartir dans le mode de ce jeton.
 
@@ -105,10 +107,15 @@ function createEdApi({
     return normalize(json, headers, mode);
   }
 
-  // Mode mobile d'abord. Tout autre code qu'un succes ou une 2FA fait
-  // retenter en mode navigateur : un mot de passe faux y echouera pareil,
-  // une version mobile perimee non.
-  async function login(credentials) {
+  // Connexion de la page : toujours en mode navigateur.
+  function login(credentials) {
+    return loginAs("browser", credentials);
+  }
+
+  // Connexion du badge, pour obtenir un accessToken. Tout autre code qu'un
+  // succes ou une 2FA fait retenter en mode navigateur : un mot de passe faux
+  // y echouera pareil, une version mobile perimee non.
+  async function loginMobile(credentials) {
     const res = await loginAs("mobile", credentials);
     if (res.code === CODE_OK || res.code === CODE_2FA_REQUIRED) return res;
 
@@ -134,12 +141,11 @@ function createEdApi({
     return normalize(json, headers, "mobile");
   }
 
-  async function get2faQuestion(twoFaToken, mode = "browser") {
+  async function get2faQuestion(twoFaToken) {
     const { json } = await post(
       "/v3/connexion/doubleauth.awp?verbe=get",
       {},
-      { [HEADER_2FA_TOKEN]: twoFaToken },
-      mode
+      { [HEADER_2FA_TOKEN]: twoFaToken }
     );
     const data = json.data || {};
     return {
@@ -149,12 +155,11 @@ function createEdApi({
     };
   }
 
-  async function send2faAnswer(choix, twoFaToken, mode = "browser") {
+  async function send2faAnswer(choix, twoFaToken) {
     const { json } = await post(
       "/v3/connexion/doubleauth.awp?verbe=post",
       { choix: encodeB64(choix) },
-      { [HEADER_2FA_TOKEN]: twoFaToken },
-      mode
+      { [HEADER_2FA_TOKEN]: twoFaToken }
     );
     const data = json.data || {};
     return { cn: data.cn, cv: data.cv };
@@ -165,13 +170,12 @@ function createEdApi({
   // le jeton n'est pas renouvele par l'appel, et rien n'est marque lu.
   // count vaut null si la reponse n'est pas exploitable ; expired dit si
   // c'est parce que le jeton est mort (520/525).
-  async function unreadMessagesCount({ token, eleveId, mode = "browser" }) {
+  async function unreadMessagesCount({ token, eleveId }) {
     const { json } = await post(
       `/v3/eleves/${encodeURIComponent(eleveId)}/messages.awp?force=false&typeRecuperation=received` +
         "&idClasseur=0&orderBy=date&order=desc&query=&onlyRead=&page=0&itemsPerPage=1&getAll=0&verbe=get",
       { anneeMessages: "" },
-      { "X-Token": token },
-      mode
+      { "X-Token": token }
     );
     const count = json.code === 200 && json.data && json.data.pagination
       ? json.data.pagination.messagesRecusNotReadCount
@@ -182,7 +186,7 @@ function createEdApi({
     };
   }
 
-  return { login, relogin, get2faQuestion, send2faAnswer, unreadMessagesCount };
+  return { login, loginMobile, relogin, get2faQuestion, send2faAnswer, unreadMessagesCount };
 }
 
 module.exports = {

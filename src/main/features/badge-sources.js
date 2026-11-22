@@ -30,11 +30,10 @@ const MODULES_NOTICE_ID = "ed-modules-notice";
 // dechargee, et c'est elle qui sert alors.
 let lastPageSession = null;
 
-// `mode` : celui du jeton de la page, auquel il est lie (voir ed-api.js).
 // `onPageExpired` est appele quand le jeton de la page AFFICHEE est mort :
 // on le sait ainsi avant que l'utilisateur ne clique. En veille la page est
 // dechargee, et c'est le reveil qui renouvelle la session.
-async function readBadgeFromPage(mainWindow, edApi, mode = "browser", onPageExpired = () => {}) {
+async function readBadgeFromPage(mainWindow, edApi, onPageExpired = () => {}) {
   if (mainWindow.isDestroyed()) return null;
 
   const pageShown = mainWindow.webContents.getURL().startsWith(ED_ORIGIN);
@@ -47,7 +46,7 @@ async function readBadgeFromPage(mainWindow, edApi, mode = "browser", onPageExpi
   const pageSession = lastPageSession;
   if (!pageSession) return null;
 
-  const { count, expired } = await edApi.unreadMessagesCount({ ...pageSession, mode: mode || "browser" });
+  const { count, expired } = await edApi.unreadMessagesCount(pageSession);
   if (count !== null) notifyArrivals(mainWindow, { MESSAGERIE: count });
   if (expired && pageShown) onPageExpired();
   return count;
@@ -111,10 +110,21 @@ async function openArrival(mainWindow, menu) {
   }
 }
 
-// Reponse de relogin par le jeton mobile, sans mot de passe ; a defaut,
-// connexion complete. Le nouvel accessToken est garde (il tourne a chaque
-// relogin). Un jeton refuse n'est pas efface ici : authFlow s'en charge a la
-// prochaine reconnexion de la page.
+// Garde l'accessToken d'une reponse du mode mobile (il tourne a chaque
+// relogin). Rien a garder en mode navigateur.
+function rememberReloginToken(deps, res) {
+  const account = ((res.data && res.data.accounts) || [])[0];
+  if (res.code !== 200 || res.mode !== "mobile" || !account || !account.accessToken) return;
+  deps.credentialsStore.saveReloginToken({
+    identifiant: account.identifiant,
+    typeCompte: account.typeCompte,
+    accessToken: account.accessToken,
+  });
+}
+
+// Relogin par le jeton mobile, sans mot de passe ; a defaut, connexion
+// complete en mode mobile (repli navigateur), qui fournit le jeton suivant.
+// Ces jetons ne servent qu'ici : la page reste en mode navigateur.
 async function freshLogin(deps) {
   const { username, password, faKeys, reloginToken } = deps.credentialsStore.read();
   const uuid = deps.credentialsStore.ensureDeviceUuid();
@@ -127,18 +137,21 @@ async function freshLogin(deps) {
       uuid,
       fa: faKeys,
     });
-    const account = ((res.data && res.data.accounts) || [])[0];
     if (res.code === 200) {
+      const account = ((res.data && res.data.accounts) || [])[0];
       if (account && account.accessToken) {
         deps.credentialsStore.saveReloginToken({ ...reloginToken, accessToken: account.accessToken });
       }
       return res;
     }
     console.warn(`Rafraîchissement du badge : relogin refusé (code ${res.code}), connexion complète.`);
+    deps.credentialsStore.saveReloginToken(null);
   }
 
   if (!username || !password) return null;
-  return deps.edApi.login({ identifiant: username, motdepasse: password, uuid, fa: faKeys });
+  const res = await deps.edApi.loginMobile({ identifiant: username, motdepasse: password, uuid, fa: faKeys });
+  rememberReloginToken(deps, res);
+  return res;
 }
 
 // Source espacee, seule a connaitre les compteurs des notes, des devoirs et

@@ -26,25 +26,37 @@ function makeApi(responses) {
 
 const OK_BODY = { code: 200, token: "T", data: { accounts: [] } };
 
-test("login appelle gtk puis login en mode mobile et transmet X-Gtk", async () => {
+// La page ne doit jamais recevoir de jeton mobile : le serveur ne repond
+// pas pareil a l'app (cahier de texte « a venir » avec les jours passes).
+test("login appelle gtk puis login en mode navigateur et transmet X-Gtk", async () => {
   const { api, calls } = makeApi([{ body: {} }, { body: OK_BODY }]);
   const res = await api.login({ identifiant: "u", motdepasse: "p", uuid: "U1" });
 
   assert.match(calls[0].url, /login\.awp\?gtk=1/);
+  assert.match(calls[1].url, /v=4\.101\.2/);
+  assert.equal(calls[1].init.headers["User-Agent"], "UA");
+  assert.equal(calls[1].init.headers["X-Gtk"], "GTKVALUE");
+  assert.equal(res.mode, "browser");
+  assert.equal(calls.length, 2);
+});
+
+test("loginMobile se presente comme l'application mobile", async () => {
+  const { api, calls } = makeApi([{ body: {} }, { body: OK_BODY }]);
+  const res = await api.loginMobile({ identifiant: "u", motdepasse: "p", uuid: "U1" });
+
   assert.match(calls[1].url, /v=8\.0\.0/);
   assert.equal(calls[0].init.headers["User-Agent"], MOBILE_USER_AGENT);
   assert.equal(calls[1].init.headers["User-Agent"], MOBILE_USER_AGENT);
-  assert.equal(calls[1].init.headers["X-Gtk"], "GTKVALUE");
   assert.equal(res.mode, "mobile");
 });
 
 // Repli si EcoleDirecte change la version mobile attendue.
-test("login retente en mode navigateur si le mode mobile est refuse", async () => {
+test("loginMobile retente en mode navigateur si le mode mobile est refuse", async () => {
   const { api, calls } = makeApi([
     { body: {} }, { body: { code: 517, message: "Aucun compte", data: {} } },
     { body: {} }, { body: OK_BODY },
   ]);
-  const res = await api.login({ identifiant: "u", motdepasse: "p", uuid: "U1" });
+  const res = await api.loginMobile({ identifiant: "u", motdepasse: "p", uuid: "U1" });
 
   assert.equal(res.code, 200);
   assert.equal(res.mode, "browser");
@@ -52,9 +64,9 @@ test("login retente en mode navigateur si le mode mobile est refuse", async () =
   assert.equal(calls[3].init.headers["User-Agent"], "UA");
 });
 
-test("login ne se replie pas sur une 2FA demandee en mode mobile", async () => {
+test("loginMobile ne se replie pas sur une 2FA demandee en mode mobile", async () => {
   const { api, calls } = makeApi([{ body: {} }, { body: { code: 250, token: "TF", data: {} } }]);
-  const res = await api.login({ identifiant: "u", motdepasse: "p", uuid: "U1" });
+  const res = await api.loginMobile({ identifiant: "u", motdepasse: "p", uuid: "U1" });
   assert.equal(res.code, 250);
   assert.equal(res.mode, "mobile");
   assert.equal(calls.length, 2);
@@ -107,9 +119,10 @@ test("login ne remonte pas de token 2FA quand la connexion reussit", async () =>
 });
 
 test("login remonte le code 505 sans lever d'exception", async () => {
-  // Refus en mode mobile, puis en repli navigateur.
-  const BAD = { code: 505, token: "", message: "Mot de passe invalide !", data: {} };
-  const { api } = makeApi([{ body: {} }, { body: BAD }, { body: {} }, { body: BAD }]);
+  const { api } = makeApi([
+    { body: {} },
+    { body: { code: 505, token: "", message: "Mot de passe invalide !", data: {} } },
+  ]);
   const res = await api.login({ identifiant: "u", motdepasse: "bad", uuid: "U1" });
   assert.equal(res.code, 505);
   assert.equal(res.message, "Mot de passe invalide !");
@@ -195,8 +208,8 @@ test("unreadMessagesCount ne prend pas une autre erreur pour une expiration", as
   assert.deepEqual(await api.unreadMessagesCount({ token: "T", eleveId: 1 }), { count: null, expired: false });
 });
 
-test("unreadMessagesCount part avec l'UA du mode du jeton", async () => {
+test("unreadMessagesCount part avec l'UA du navigateur, celui du jeton de la page", async () => {
   const { api, calls } = makeApi([{ body: { code: 200, data: { pagination: { messagesRecusNotReadCount: 0 } } } }]);
-  await api.unreadMessagesCount({ token: "TOK", eleveId: 1, mode: "mobile" });
-  assert.equal(calls[0].init.headers["User-Agent"], MOBILE_USER_AGENT);
+  await api.unreadMessagesCount({ token: "TOK", eleveId: 1 });
+  assert.equal(calls[0].init.headers["User-Agent"], "UA");
 });

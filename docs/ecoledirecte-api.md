@@ -189,16 +189,35 @@ et renvoie un **nouvel** `accessToken` ; l'ancien reste accepté juste après.
 **Un jeton (`X-Token`) est lié au User-Agent qui l'a obtenu**, pas à la
 version : un jeton mobile répond `525` avec l'UA du navigateur et `200` avec
 l'UA mobile (quelle que soit `v`) ; un jeton navigateur répond `520` avec
-l'UA mobile. D'où, dans l'application, la réécriture de l'UA des appels de la
-page quand sa session vient du mode mobile (`setupPageUserAgent`, hors
-endpoints d'authentification).
+l'UA mobile.
+
+**Le serveur ne répond pas tout à fait pareil à l'app mobile.** Comparé le
+22/11/2026 sur 18 endpoints de lecture élève (deux appels navigateur pour
+écarter le bruit, un appel mobile) :
+
+| Endpoint | En mode mobile |
+|---|---|
+| `Eleves/{id}/cahierdetexte` (« À venir ») | ajoute les jours **passés** (depuis le 02/11 au lieu du 24/11) : le site les affiche tels quels |
+| `login` → module `CLOUD` | perd `nbBadgePostits`, `isActifPostitsEspacesTravail`, `nbBadgeAgendaEvenements`, `isActifAgendaEvenementsEspacesTravail` |
+| `login` → `profile.photo` | URL absolue `https://…` au lieu de `//…` (sans effet) |
+
+Identiques : timeline, timeline commune, emploi du temps, cahier de texte
+d'un jour, messagerie, vie de la classe, espaces de travail, visios, sondages,
+edforms, comptes, manuels, documents, QCM. Les moyennes min/max/générale des
+notes changent à **chaque** appel dans les deux modes quand
+`parametrage.moyenneGenerale` est faux : des leurres, pas une différence.
+
+D'où la règle : **la page reste en mode navigateur.** Le mode mobile (et son
+`accessToken`) ne sert qu'au rafraîchissement du badge (`badge-sources.js`).
+Les versions 2.4.3 et 2.4.4 réécrivaient l'UA des appels de la page pour lui
+faire utiliser le jeton mobile ; retiré en 2.4.5 à cause du cahier de texte.
 
 Le SPA est le même code Angular/Ionic sur le web et dans l'app : son
 intercepteur, sur 520/525/401, affiche la modale « session expirée » si
 `isBrowser`, et sinon rafraîchit le jeton en silence puis rejoue la requête.
 
 Repli : si le login mobile renvoie autre chose que 200 ou 250 (version
-mobile périmée par exemple), `ed-api.login` retente en mode navigateur.
+mobile périmée par exemple), `ed-api.loginMobile` retente en mode navigateur.
 
 ### Notifications push : FCM côté app native seulement
 
@@ -244,14 +263,17 @@ et bruitée, dans `features/badge.js`.
 
 Depuis le 22/11/2026, cette connexion est un relogin par `accessToken` (mode
 mobile, sans mot de passe), toutes les 10 min ± 3. Vérifié : sa réponse porte
-les mêmes compteurs de modules que le login complet. Le login complet ne sert
-plus qu'en repli. Les comptes de la réponse de relogin n'ont pas de champ
+les mêmes compteurs de modules que le login complet. Le login complet (mode
+mobile, repli navigateur) ne sert qu'à obtenir le premier jeton, ou un
+nouveau si le relogin est refusé. Ces jetons ne touchent jamais la page. Les comptes de la réponse de relogin n'ont pas de champ
 `current` : le premier compte fait foi.
 
 Le relevé de la messagerie (toutes les 5 min, jeton de la page) sert aussi de
 sonde : un 520/525 dit que le jeton de la page est mort. Si la fenêtre est
 affichée et que l'ordinateur est inactif depuis 60 s, sans texte en cours de
 saisie, la page est renouvelée et rechargée en silence (`renewIfIdle`).
+Renouvellements de la page (réveil, absence, reprise) : connexion du site,
+en mode navigateur, avec le mot de passe enregistré.
 
 ### L'ancienne lecture DOM, et pourquoi elle a été retirée
 

@@ -16,10 +16,10 @@ const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
 const { createTwoFaWindow } = require("./windows/twofa-window");
 const { setPaletteActions } = require("./windows/palette-window");
-const { createEdApi, MOBILE_USER_AGENT } = require("./auth/ed-api");
+const { createEdApi } = require("./auth/ed-api");
 const { createAuthFlow } = require("./auth/auth-flow");
 const { createReloginGuard } = require("./auth/relogin-guard");
-const { createExpiryWatcher, readApiCode, isAuthEndpoint, GRACE_MS } = require("./auth/expiry-watcher");
+const { createExpiryWatcher, readApiCode, GRACE_MS } = require("./auth/expiry-watcher");
 const { createCredentialsStore } = require("./auth/credentials-store");
 const {
   toSessionStorageEntries,
@@ -57,9 +57,6 @@ console.log("userData =", userDataPath);
 // =========================
 
 let currentSessionSeed = null;
-// Mode d'API du jeton semé dans la page (voir setupPageUserAgent), ou null
-// si la page n'a pas de session venant de nous.
-let pageMode = null;
 // Session renouvelee au reveil : a imposer au prochain chargement, meme si
 // la page a deja une session (perimee) dans son sessionStorage.
 let forceNextSeed = false;
@@ -68,7 +65,6 @@ function setSessionSeed(state, faKeys) {
   currentSessionSeed = state
     ? { session: toSessionStorageEntries(state), local: toLocalStorageEntries(faKeys) }
     : null;
-  pageMode = state ? state.mode : null;
 }
 
 // Le preload filtre deja l'origine ; on le reverifie ici, cote confiance :
@@ -83,34 +79,20 @@ ipcMain.on("ed:session-seed", (event, wanted) => {
   event.returnValue = currentSessionSeed;
 });
 
-// Un jeton est lie au User-Agent qui l'a obtenu. Un jeton du mode mobile
-// n'est donc accepte que si la page envoie l'UA mobile : on le pose sur ses
-// appels a l'API. Nos propres appels (webContentsId absent) fixent leur UA
-// eux-memes. Les endpoints d'authentification gardent l'UA du navigateur :
-// le formulaire du site s'y connecte avec la version du site, que l'UA
-// mobile ferait refuser.
-function setupPageUserAgent(ses) {
-  ses.webRequest.onBeforeSendHeaders({ urls: ["*://api.ecoledirecte.com/*"] }, (details, callback) => {
-    if (pageMode === "mobile" && details.webContentsId !== undefined && !isAuthEndpoint(details.url)) {
-      details.requestHeaders["User-Agent"] = MOBILE_USER_AGENT;
-    }
-    callback({ requestHeaders: details.requestHeaders });
-  });
-}
-
-// Au reveil la page va etre rechargee : on renouvelle la session avant, par
-// le jeton mobile, pour qu'elle reparte avec un jeton valide plutot que
-// d'echouer au premier clic. Sans fenetre : un echec laisse la reprise
-// habituelle (setupExpiryRecovery) s'en charger.
+// Au reveil la page va etre rechargee : on renouvelle la session avant, pour
+// qu'elle reparte avec un jeton valide plutot que d'echouer au premier clic.
+// Connexion du site (mode navigateur, mot de passe) : la page ne doit pas
+// recevoir de jeton mobile, voir ed-api.js. Sans fenetre : un echec, ou une
+// 2FA demandee, laisse la reprise habituelle (setupExpiryRecovery) agir.
 async function renewSessionBeforeWake(deps) {
-  const result = await deps.authFlow.refresh();
+  const result = await deps.authFlow.authenticate();
   if (result.status !== "ok") {
-    console.warn(`Renouvellement au réveil impossible (${result.code}), la reprise prendra le relais.`);
+    console.warn(`Renouvellement au réveil impossible (${result.code || result.status}), la reprise prendra le relais.`);
     return;
   }
   setSessionSeed(result.state, deps.credentialsStore.read().faKeys);
   forceNextSeed = true;
-  console.log(`Session renouvelée au réveil (mode ${result.state.mode}).`);
+  console.log("Session renouvelée au réveil.");
 }
 
 // =========================
@@ -209,8 +191,7 @@ let lastAuthFailure = null;
 async function ensureAuthenticated(mainWindow, deps) {
   const { authFlow, credentialsStore, reloginGuard } = deps;
 
-  // Jeton mobile d'abord, mot de passe en repli : voir authFlow.refresh.
-  let result = await authFlow.refresh();
+  let result = await authFlow.authenticate();
 
   if (result.status === "failed" && result.code === "NO_CREDENTIALS") {
     await promptCredentials(mainWindow, credentialsStore);
@@ -465,7 +446,6 @@ async function main() {
 
   Menu.setApplicationMenu(null);
   setupTray(mainWindow);
-  setupPageUserAgent(ses);
   setupSleep(mainWindow, {
     loadingPage: LOADING_PAGE,
     showStatus: (text) => setLoadingStatus(mainWindow, text),
@@ -523,7 +503,7 @@ async function main() {
 
   startBadgePolling({
     mainWindow,
-    readLocalCount: () => readBadgeFromPage(mainWindow, deps.edApi, pageMode, () => {
+    readLocalCount: () => readBadgeFromPage(mainWindow, deps.edApi, () => {
       renewIfIdle(mainWindow, recover).catch((err) => console.warn("Renouvellement anticipé échoué :", err.message));
     }),
     refreshRemoteCount: () => readBadgeFromApi(deps, mainWindow),

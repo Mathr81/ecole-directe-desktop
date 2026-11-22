@@ -3,14 +3,13 @@ const assert = require("node:assert/strict");
 const { createAuthFlow } = require("../src/main/auth/auth-flow");
 
 function makeStore(initial = {}) {
-  let data = { username: "u", password: "p", deviceUuid: "U1", faKeys: [], reloginToken: null, ...initial };
+  let data = { username: "u", password: "p", deviceUuid: "U1", faKeys: [], ...initial };
   return {
     read: () => data,
     writeCredentials: (username, password) => { data = { ...data, username, password }; },
     ensureDeviceUuid: () => data.deviceUuid,
     saveFaKeys: (faKeys) => { data = { ...data, faKeys }; },
     clearFaKeys: () => { data = { ...data, faKeys: [] }; },
-    saveReloginToken: (reloginToken) => { data = { ...data, reloginToken }; },
   };
 }
 
@@ -146,91 +145,4 @@ test("une erreur reseau devient un etat failed, pas une exception", async () => 
   const res = await flow.authenticate();
   assert.equal(res.status, "failed");
   assert.equal(res.code, "NETWORK_ERROR");
-});
-
-const MOBILE_OK = {
-  code: 200,
-  mode: "mobile",
-  token: "T",
-  data: { accounts: [{ id: 1, identifiant: "u", typeCompte: "E", accessToken: "AT1" }] },
-};
-const quiet = () => {};
-
-test("un login mobile memorise l'accessToken et le mode", async () => {
-  const store = makeStore();
-  const flow = createAuthFlow({ edApi: { login: async () => MOBILE_OK }, credentialsStore: store, now: () => 1 });
-  const res = await flow.authenticate();
-  assert.equal(res.state.mode, "mobile");
-  assert.deepEqual(store.read().reloginToken, { identifiant: "u", typeCompte: "E", accessToken: "AT1" });
-});
-
-test("un login en repli navigateur efface l'accessToken memorise", async () => {
-  const store = makeStore({ reloginToken: { identifiant: "u", typeCompte: "E", accessToken: "OLD" } });
-  const flow = createAuthFlow({ edApi: { login: async () => ({ ...OK, mode: "browser" }) }, credentialsStore: store, now: () => 1 });
-  const res = await flow.authenticate();
-  assert.equal(res.state.mode, "browser");
-  assert.equal(store.read().reloginToken, null);
-});
-
-test("refresh se reconnecte par jeton, sans mot de passe, et garde le nouveau jeton", async () => {
-  const store = makeStore({ reloginToken: { identifiant: "u", typeCompte: "E", accessToken: "AT0" } });
-  let sent = null;
-  const flow = createAuthFlow({
-    edApi: {
-      relogin: async (args) => { sent = args; return MOBILE_OK; },
-      login: async () => { throw new Error("pas de login complet attendu"); },
-    },
-    credentialsStore: store,
-    now: () => 1,
-  });
-  const res = await flow.refresh();
-  assert.equal(res.status, "ok");
-  assert.equal(sent.accesstoken, "AT0");
-  assert.equal(sent.typeCompte, "E");
-  assert.equal(store.read().reloginToken.accessToken, "AT1");
-});
-
-test("refresh retombe sur le login complet si le jeton est refuse", async () => {
-  const store = makeStore({ reloginToken: { identifiant: "u", typeCompte: "E", accessToken: "MORT" } });
-  let logins = 0;
-  const flow = createAuthFlow({
-    edApi: {
-      relogin: async () => ({ code: 505, message: "refuse", data: {} }),
-      login: async () => { logins += 1; return { ...OK, mode: "browser" }; },
-    },
-    credentialsStore: store,
-    now: () => 1,
-    warn: quiet,
-  });
-  const res = await flow.refresh();
-  assert.equal(res.status, "ok");
-  assert.equal(logins, 1);
-  assert.equal(store.read().reloginToken, null);
-});
-
-test("refresh sans jeton memorise fait un login complet", async () => {
-  let relogins = 0;
-  const flow = createAuthFlow({
-    edApi: { relogin: async () => { relogins += 1; }, login: async () => MOBILE_OK },
-    credentialsStore: makeStore(),
-    now: () => 1,
-  });
-  assert.equal((await flow.refresh()).status, "ok");
-  assert.equal(relogins, 0);
-});
-
-test("la 2FA reste dans le mode du login qui l'a demandee", async () => {
-  const modes = [];
-  const flow = createAuthFlow({
-    edApi: {
-      login: async () => ({ code: 250, mode: "mobile", twoFaToken: "TF", data: {} }),
-      get2faQuestion: async (tok, mode) => { modes.push(mode); return { question: "Q", propositions: [] }; },
-      send2faAnswer: async (a, tok, mode) => { modes.push(mode); return {}; },
-    },
-    credentialsStore: makeStore(),
-    now: () => 1,
-  });
-  await flow.authenticate();
-  await flow.submit2faAnswer("A");
-  assert.deepEqual(modes, ["mobile", "mobile"]);
 });
