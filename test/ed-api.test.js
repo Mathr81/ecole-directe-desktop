@@ -175,17 +175,24 @@ test("unreadMessagesCount lit le compteur avec le jeton de la page", async () =>
   const { api, calls } = makeApi([{
     body: { code: 200, data: { pagination: { messagesRecusCount: 71, messagesRecusNotReadCount: 3 } } },
   }]);
-  const count = await api.unreadMessagesCount({ token: "TOK", eleveId: 5618 });
+  const res = await api.unreadMessagesCount({ token: "TOK", eleveId: 5618 });
 
-  assert.equal(count, 3);
+  assert.deepEqual(res, { count: 3, expired: false });
   assert.match(calls[0].url, /\/v3\/eleves\/5618\/messages\.awp\?.*verbe=get/);
   assert.match(calls[0].url, /v=4\.101\.2/);
   assert.equal(calls[0].init.headers["X-Token"], "TOK");
 });
 
-test("unreadMessagesCount rend null sur un jeton expire", async () => {
-  const { api } = makeApi([{ body: { code: 520, message: "Token invalide !" } }]);
-  assert.equal(await api.unreadMessagesCount({ token: "OLD", eleveId: 1 }), null);
+test("unreadMessagesCount signale un jeton expire", async () => {
+  for (const code of [520, 525]) {
+    const { api } = makeApi([{ body: { code, message: "Token invalide !" } }]);
+    assert.deepEqual(await api.unreadMessagesCount({ token: "OLD", eleveId: 1 }), { count: null, expired: true });
+  }
+});
+
+test("unreadMessagesCount ne prend pas une autre erreur pour une expiration", async () => {
+  const { api } = makeApi([{ body: { code: 500, message: "Erreur" } }]);
+  assert.deepEqual(await api.unreadMessagesCount({ token: "T", eleveId: 1 }), { count: null, expired: false });
 });
 
 test("unreadMessagesCount part avec l'UA du mode du jeton", async () => {

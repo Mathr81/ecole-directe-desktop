@@ -31,10 +31,14 @@ const MODULES_NOTICE_ID = "ed-modules-notice";
 let lastPageSession = null;
 
 // `mode` : celui du jeton de la page, auquel il est lie (voir ed-api.js).
-async function readBadgeFromPage(mainWindow, edApi, mode = "browser") {
+// `onPageExpired` est appele quand le jeton de la page AFFICHEE est mort :
+// on le sait ainsi avant que l'utilisateur ne clique. En veille la page est
+// dechargee, et c'est le reveil qui renouvelle la session.
+async function readBadgeFromPage(mainWindow, edApi, mode = "browser", onPageExpired = () => {}) {
   if (mainWindow.isDestroyed()) return null;
 
-  if (mainWindow.webContents.getURL().startsWith(ED_ORIGIN)) {
+  const pageShown = mainWindow.webContents.getURL().startsWith(ED_ORIGIN);
+  if (pageShown) {
     const [rawCredentials, rawAccounts] = await mainWindow.webContents.executeJavaScript(
       '[sessionStorage.getItem("credentials"), sessionStorage.getItem("accounts")]'
     );
@@ -43,8 +47,9 @@ async function readBadgeFromPage(mainWindow, edApi, mode = "browser") {
   const pageSession = lastPageSession;
   if (!pageSession) return null;
 
-  const count = await edApi.unreadMessagesCount({ ...pageSession, mode: mode || "browser" });
+  const { count, expired } = await edApi.unreadMessagesCount({ ...pageSession, mode: mode || "browser" });
   if (count !== null) notifyArrivals(mainWindow, { MESSAGERIE: count });
+  if (expired && pageShown) onPageExpired();
   return count;
 }
 
@@ -106,22 +111,46 @@ async function openArrival(mainWindow, menu) {
   }
 }
 
-// Source espacee : une connexion complete, seule a connaitre les compteurs
-// des notes, des devoirs et de la vie scolaire.
+// Reponse de relogin par le jeton mobile, sans mot de passe ; a defaut,
+// connexion complete. Le nouvel accessToken est garde (il tourne a chaque
+// relogin). Un jeton refuse n'est pas efface ici : authFlow s'en charge a la
+// prochaine reconnexion de la page.
+async function freshLogin(deps) {
+  const { username, password, faKeys, reloginToken } = deps.credentialsStore.read();
+  const uuid = deps.credentialsStore.ensureDeviceUuid();
+
+  if (reloginToken) {
+    const res = await deps.edApi.relogin({
+      identifiant: reloginToken.identifiant,
+      typeCompte: reloginToken.typeCompte,
+      accesstoken: reloginToken.accessToken,
+      uuid,
+      fa: faKeys,
+    });
+    const account = ((res.data && res.data.accounts) || [])[0];
+    if (res.code === 200) {
+      if (account && account.accessToken) {
+        deps.credentialsStore.saveReloginToken({ ...reloginToken, accessToken: account.accessToken });
+      }
+      return res;
+    }
+    console.warn(`Rafraîchissement du badge : relogin refusé (code ${res.code}), connexion complète.`);
+  }
+
+  if (!username || !password) return null;
+  return deps.edApi.login({ identifiant: username, motdepasse: password, uuid, fa: faKeys });
+}
+
+// Source espacee, seule a connaitre les compteurs des notes, des devoirs et
+// de la vie scolaire : le relogin les porte comme le login complet
+// (verifie le 22/11/2026).
 //
 // Volontairement en dehors d'authFlow : sur un code 250, celui-ci effacerait
 // les cles fa et demanderait la question de double authentification. Un
 // rafraichissement de badge doit rester en lecture seule.
 async function readBadgeFromApi(deps, mainWindow) {
-  const { username, password, faKeys } = deps.credentialsStore.read();
-  if (!username || !password) return null;
-
-  const res = await deps.edApi.login({
-    identifiant: username,
-    motdepasse: password,
-    uuid: deps.credentialsStore.ensureDeviceUuid(),
-    fa: faKeys,
-  });
+  const res = await freshLogin(deps);
+  if (!res) return null;
 
   if (res.code !== 200) {
     console.warn(`Rafraîchissement du badge : code ${res.code}, valeur conservée.`);

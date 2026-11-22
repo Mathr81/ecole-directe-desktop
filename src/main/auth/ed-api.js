@@ -163,7 +163,8 @@ function createEdApi({
   // Compteur de non-lus de la messagerie, avec le jeton d'une session deja
   // ouverte : ni login ni mot de passe. Verifie (scripts/diag-page-token.js) :
   // le jeton n'est pas renouvele par l'appel, et rien n'est marque lu.
-  // null si la reponse n'est pas exploitable (jeton expire, typiquement).
+  // count vaut null si la reponse n'est pas exploitable ; expired dit si
+  // c'est parce que le jeton est mort (520/525).
   async function unreadMessagesCount({ token, eleveId, mode = "browser" }) {
     const { json } = await post(
       `/v3/eleves/${encodeURIComponent(eleveId)}/messages.awp?force=false&typeRecuperation=received` +
@@ -175,7 +176,10 @@ function createEdApi({
     const count = json.code === 200 && json.data && json.data.pagination
       ? json.data.pagination.messagesRecusNotReadCount
       : null;
-    return Number.isInteger(count) && count >= 0 ? count : null;
+    return {
+      count: Number.isInteger(count) && count >= 0 ? count : null,
+      expired: json.code === 520 || json.code === 525,
+    };
   }
 
   return { login, relogin, get2faQuestion, send2faAnswer, unreadMessagesCount };

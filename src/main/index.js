@@ -1,4 +1,4 @@
-const { app, ipcMain, Menu, safeStorage, session } = require("electron");
+const { app, ipcMain, Menu, powerMonitor, safeStorage, session } = require("electron");
 const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 const path = require("path");
 
@@ -10,7 +10,7 @@ const { startBadgePolling, stopBadgePolling, applyBadge } = require("./features/
 const { setupDownloads } = require("./features/downloads");
 const { setupTray, showWindow, startedHidden } = require("./features/tray");
 const { setupOfflineRecovery, waitBeforeRetry } = require("./features/offline");
-const { setupSleep } = require("./features/sleep");
+const { setupSleep, HAS_DRAFT } = require("./features/sleep");
 const { showNotice, clearNotice } = require("./features/page-notice");
 const { createMainWindow } = require("./windows/main-window");
 const { createLoginWindow } = require("./windows/login-window");
@@ -334,7 +334,9 @@ function setupExpiryRecovery(mainWindow, deps) {
     timer = null;
   };
 
-  async function recover() {
+  // `quiet` : reprise anticipee, l'utilisateur n'est pas devant l'ecran.
+  // Pas d'annonce, la page se recharge simplement.
+  async function recover({ quiet = false } = {}) {
     cancelTimer();
     if (inProgress || mainWindow.isDestroyed()) return;
 
@@ -352,8 +354,8 @@ function setupExpiryRecovery(mainWindow, deps) {
       const current = mainWindow.webContents.getURL();
       const target = current.startsWith(ED_ORIGIN) ? current : HOME_URL;
 
-      console.log("Session expirée détectée, réauthentification par API.");
-      showNotice(mainWindow, AUTH_NOTICE_ID, "Session expirée, reconnexion…");
+      console.log(`Session expirée détectée${quiet ? " (en votre absence)" : ""}, réauthentification par API.`);
+      if (!quiet) showNotice(mainWindow, AUTH_NOTICE_ID, "Session expirée, reconnexion…");
       deps.reloginGuard.recordAttempt();
 
       const state = await ensureAuthenticated(mainWindow, deps);
@@ -407,6 +409,21 @@ function setupExpiryRecovery(mainWindow, deps) {
   );
 
   mainWindow.on("closed", cancelTimer);
+  return { recover };
+}
+
+// Le jeton de la page est mort (repere par le badge) alors que la fenetre
+// reste ouverte. Si l'utilisateur est absent, on renouvelle et recharge tout
+// de suite : a son retour, la page marche. S'il est la, on ne recharge pas
+// sous ses yeux ; la reprise au premier echec de la page s'en chargera.
+const IDLE_BEFORE_RENEW_S = 60;
+
+async function renewIfIdle(mainWindow, recover) {
+  if (mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+  if (powerMonitor.getSystemIdleTime() < IDLE_BEFORE_RENEW_S) return;
+  const hasDraft = await mainWindow.webContents.executeJavaScript(HAS_DRAFT).catch(() => true);
+  if (hasDraft) return;
+  await recover({ quiet: true });
 }
 
 // =========================
@@ -457,7 +474,7 @@ async function main() {
   if (startedHidden()) mainWindow.hide();
 
   setupReloginOnRedirect(mainWindow, deps);
-  setupExpiryRecovery(mainWindow, deps);
+  const { recover } = setupExpiryRecovery(mainWindow, deps);
 
   // Sans cela la fenetre reste blanche pendant toute l'authentification puis
   // le chargement du site, soit environ trois secondes ou l'application
@@ -506,7 +523,9 @@ async function main() {
 
   startBadgePolling({
     mainWindow,
-    readLocalCount: () => readBadgeFromPage(mainWindow, deps.edApi, pageMode),
+    readLocalCount: () => readBadgeFromPage(mainWindow, deps.edApi, pageMode, () => {
+      renewIfIdle(mainWindow, recover).catch((err) => console.warn("Renouvellement anticipé échoué :", err.message));
+    }),
     refreshRemoteCount: () => readBadgeFromApi(deps, mainWindow),
     initialCount: state ? messagerieBadgeCount(state) : 0,
   });

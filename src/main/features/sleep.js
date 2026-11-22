@@ -80,4 +80,4 @@ function awake() {
   return waking || Promise.resolve();
 }
 
-module.exports = { setupSleep, awake, SLEEP_DELAY_MS };
+module.exports = { setupSleep, awake, SLEEP_DELAY_MS, HAS_DRAFT };

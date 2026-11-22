@@ -30,18 +30,19 @@ function badgeLog(...args) { if (DEBUG_BADGE) console.log("[BADGE]", ...args); }
 // passe. Frequente sans etre insistante.
 const LOCAL_INTERVAL_MS = 5 * 60 * 1000;
 
-// Rafraichissement distant : une connexion complete. Espace, et decale
-// aleatoirement pour ne jamais tomber au meme instant d'un cycle a l'autre.
-const REMOTE_BASE_MS = 30 * 60 * 1000;
-const REMOTE_JITTER_MS = 10 * 60 * 1000;
+// Rafraichissement distant : un relogin par jeton (sans mot de passe), a
+// defaut une connexion complete. Decale aleatoirement pour ne jamais tomber
+// au meme instant d'un cycle a l'autre.
+const REMOTE_BASE_MS = 10 * 60 * 1000;
+const REMOTE_JITTER_MS = 3 * 60 * 1000;
 
 // Premiere lecture peu apres le demarrage : le temps que le SPA hydrate
 // son store, ou l'on lit le jeton.
 const FIRST_LOCAL_MS = 5000;
 
 /**
- * Delai avant le prochain rafraichissement distant : 30 min plus ou moins
- * 10, soit 20 a 40 min. Pur, horloge et alea injectes.
+ * Delai avant le prochain rafraichissement distant : 10 min plus ou moins
+ * 3, soit 7 a 13 min. Pur, horloge et alea injectes.
  */
 function nextRemoteDelay(random = Math.random) {
   const offset = (random() * 2 - 1) * REMOTE_JITTER_MS;

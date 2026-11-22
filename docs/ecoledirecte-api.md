@@ -240,7 +240,18 @@ de login.
 `webRequest.onHeadersReceived` donne les en-têtes, jamais le corps. Le
 compteur est dans le corps. Il n'y a donc pas moyen de récupérer le badge en
 observant le trafic que le SPA génère déjà ; d'où la connexion dédiée, espacée
-et bruitée (30 min ± 10), dans `features/badge.js`.
+et bruitée, dans `features/badge.js`.
+
+Depuis le 22/11/2026, cette connexion est un relogin par `accessToken` (mode
+mobile, sans mot de passe), toutes les 10 min ± 3. Vérifié : sa réponse porte
+les mêmes compteurs de modules que le login complet. Le login complet ne sert
+plus qu'en repli. Les comptes de la réponse de relogin n'ont pas de champ
+`current` : le premier compte fait foi.
+
+Le relevé de la messagerie (toutes les 5 min, jeton de la page) sert aussi de
+sonde : un 520/525 dit que le jeton de la page est mort. Si la fenêtre est
+affichée et que l'ordinateur est inactif depuis 60 s, sans texte en cours de
+saisie, la page est renouvelée et rechargée en silence (`renewIfIdle`).
 
 ### L'ancienne lecture DOM, et pourquoi elle a été retirée
 

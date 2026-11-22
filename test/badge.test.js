@@ -73,10 +73,9 @@ test("l'alea decale reellement d'un tirage a l'autre", () => {
 });
 
 test("la cadence distante reste discrete", () => {
-  // Au pire 40 min entre deux, au mieux 20 : trois connexions par heure
-  // maximum. L'utilisateur est notifie sur son telephone de toute facon.
+  // Au mieux 7 min entre deux : neuf relogins par heure maximum.
   const parHeurePire = 60 / ((REMOTE_BASE_MS - REMOTE_JITTER_MS) / 60000);
-  assert.ok(parHeurePire <= 3, `${parHeurePire} connexions par heure, trop`);
+  assert.ok(parHeurePire <= 9, `${parHeurePire} connexions par heure, trop`);
   assert.ok(REMOTE_JITTER_MS > 0, "sans alea, la cadence est previsible");
 });
 
