@@ -28,5 +28,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Electron 44 telecharge son binaire au premier require("electron") :
+      # sans cette etape, les fichiers de test, lances en parallele, le
+      # telechargent ensemble et se marchent dessus (icudtl.dat: File exists).
+      - name: Install Electron binary
+        run: pnpm exec install-electron
+
       - name: Tests
         run: pnpm test
